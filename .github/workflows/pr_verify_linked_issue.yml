@@ -7,7 +7,7 @@ name: VerifyIssue
 
 "on":
   pull_request:
-    types: [edited, synchronize, opened, reopened]
+    types: [ edited, synchronize, opened, reopened ]
   check_run:
 
 jobs:

@@ -4,7 +4,7 @@ name: Auto Assign New Issues to Project
 
 "on":
   issues:
-    types: [opened]
+    types: [ opened ]
 
 jobs:
   assign_one_project:
