@@ -111,7 +111,7 @@ var (
 
 var (
 	// NodeDataHome is the folder containing the data dedicated to the node.
-	NodeDataHome = "data-node"
+	NodeDataHome = "node"
 
 	// NodeWalletsDataHome is the folder containing the data dedicated to the
 	// node wallets.
