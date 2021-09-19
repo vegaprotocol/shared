@@ -26,6 +26,8 @@ var (
 // 	│	└── proxy.toml
 // 	├── data-node/
 // 	│	└── config.toml
+// 	├── faucet/
+// 	│	└── config.toml
 // 	├── node/
 // 	│	├── config.toml
 // 	│	└── wallets.toml
@@ -56,6 +58,14 @@ var (
 	// DataNodeDefaultConfigFile is the default configuration file for the
 	// data-node.
 	DataNodeDefaultConfigFile = filepath.Join(DataNodeConfigHome, "config.toml")
+
+	// FaucetConfigHome is the folder containing the configuration files
+	// dedicated to the node.
+	FaucetConfigHome = "faucet"
+
+	// FaucetDefaultConfigFile is the default configuration file for the
+	// data-node.
+	FaucetDefaultConfigFile = filepath.Join(FaucetConfigHome, "config.toml")
 
 	// NodeConfigHome is the folder containing the configuration files dedicated
 	// to the node.
@@ -98,9 +108,12 @@ var (
 // 	├── node/
 // 	│	└── wallets/
 // 	│		├── vega/
-// 	│		│	└── vega-node-wallet
+// 	│		│	└── vega.timestamp
 // 	│		└── ethereum/
 // 	│			└── eth-node-wallet
+// 	├── faucet/
+// 	│	└── wallets/
+// 	│		└── vega.timestamp
 // 	├── wallets/
 // 	│	├── vega-wallet-1
 // 	│	└── vega-wallet-2
@@ -124,6 +137,13 @@ var (
 	// EthereumNodeWalletsDataHome is the folder containing the ethereum wallet
 	// dedicated to the node.
 	EthereumNodeWalletsDataHome = filepath.Join(NodeWalletsDataHome, "ethereum")
+
+	// FaucetDataHome is the folder containing the data dedicated to the faucet.
+	FaucetDataHome = "faucet"
+
+	// FaucetWalletsDataHome is the folder containing the data dedicated to the
+	// faucet wallets.
+	FaucetWalletsDataHome = filepath.Join(FaucetDataHome, "wallets")
 
 	// WalletsDataHome is the folder containing the user wallets.
 	WalletsDataHome = "wallets"
