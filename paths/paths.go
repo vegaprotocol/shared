@@ -36,7 +36,7 @@ var (
 // 	├── wallet-desktop/
 // 	│	└── config.toml
 // 	└── wallet-service/
-// 		└── config.toml
+// 		└── networks/
 
 var (
 	// ConsoleConfigHome is the folder containing the configuration files
@@ -94,12 +94,12 @@ var (
 	WalletDesktopDefaultConfigFile = filepath.Join(WalletDesktopConfigHome, "config.toml")
 
 	// WalletServiceConfigHome is the folder containing the configuration files
-	// dedicated to the wallet desktop application.
+	// dedicated to the wallet service application.
 	WalletServiceConfigHome = "wallet-service"
 
-	// WalletServiceDefaultConfigFile is the default configuration file for the
-	// wallet desktop application.
-	WalletServiceDefaultConfigFile = filepath.Join(WalletServiceConfigHome, "config.toml")
+	// WalletServiceNetworksConfigHome is the folder containing the
+	// configuration files dedicated to the networks.
+	WalletServiceNetworksConfigHome = filepath.Join(WalletServiceConfigHome, "networks")
 )
 
 // File structure for data
