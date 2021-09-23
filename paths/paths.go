@@ -168,6 +168,9 @@ var (
 // File structure for state
 //
 // STATE_HOME
+// 	├── data-node/
+// 	│	├── logs/
+// 	│	└── storage/
 // 	├── node/
 // 	│	├── logs/
 // 	│	├── checkpoints/
@@ -186,6 +189,10 @@ var (
 
 	// DataNodeLogsHome is the folder containing the logs of the data-node.
 	DataNodeLogsHome = filepath.Join(DataNodeStateHome, "logs")
+
+	// DataNodeStorageHome is the folder containing the data storage of the
+	// data-node.
+	DataNodeStorageHome = filepath.Join(DataNodeStateHome, "storage")
 
 	// NodeStateHome is the folder containing the state of the node.
 	NodeStateHome = "node"
