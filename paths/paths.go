@@ -175,6 +175,7 @@ var (
 // 	│	├── logs/
 // 	│	├── checkpoints/
 // 	│	└── snapshots/
+// 			└── ldb
 // 	├── wallet-cli/
 // 	│	└── logs/
 // 	├── wallet-desktop/
@@ -207,6 +208,9 @@ var (
 	// SnapshotStateHome is the folder containing the snapshot files
 	// of to the node.
 	SnapshotStateHome = filepath.Join(NodeStateHome, "snapshots")
+
+	// DB file for GoLevelDB
+	SnapshotStateDBFile = filepath.Join(SnapshotStateHome, "ldb")
 
 	// WalletCLIStateHome is the folder containing the state of the wallet CLI.
 	WalletCLIStateHome = "wallet-cli"
