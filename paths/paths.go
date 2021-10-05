@@ -210,7 +210,7 @@ var (
 	SnapshotStateHome = filepath.Join(NodeStateHome, "snapshots")
 
 	// DB file for GoLevelDB
-	SnapshotStateDBFile = filepath.Join(SnapshotStateHome, "ldb")
+	SnapshotDBStateFile = filepath.Join(SnapshotStateHome, "ldb")
 
 	// WalletCLIStateHome is the folder containing the state of the wallet CLI.
 	WalletCLIStateHome = "wallet-cli"
