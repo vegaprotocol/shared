@@ -23,43 +23,43 @@ type CustomPaths struct {
 	CustomHome string
 }
 
-func (p *CustomPaths) CacheDirFor(relDirPath string) (string, error) {
+func (p *CustomPaths) CacheDirFor(relDirPath CachePath) (string, error) {
 	return CustomCacheDirFor(p.CustomHome, relDirPath)
 }
 
-func (p *CustomPaths) CachePathFor(relFilePath string) (string, error) {
+func (p *CustomPaths) CachePathFor(relFilePath CachePath) (string, error) {
 	return CustomCachePathFor(p.CustomHome, relFilePath)
 }
 
-func (p *CustomPaths) ConfigDirFor(relDirPath string) (string, error) {
+func (p *CustomPaths) ConfigDirFor(relDirPath ConfigPath) (string, error) {
 	return CustomConfigDirFor(p.CustomHome, relDirPath)
 }
 
-func (p *CustomPaths) ConfigPathFor(relFilePath string) (string, error) {
+func (p *CustomPaths) ConfigPathFor(relFilePath ConfigPath) (string, error) {
 	return CustomConfigPathFor(p.CustomHome, relFilePath)
 }
 
-func (p *CustomPaths) DataDirFor(relDirPath string) (string, error) {
+func (p *CustomPaths) DataDirFor(relDirPath DataPath) (string, error) {
 	return CustomDataDirFor(p.CustomHome, relDirPath)
 }
 
-func (p *CustomPaths) DataPathFor(relFilePath string) (string, error) {
+func (p *CustomPaths) DataPathFor(relFilePath DataPath) (string, error) {
 	return CustomDataPathFor(p.CustomHome, relFilePath)
 }
 
-func (p *CustomPaths) StateDirFor(relDirPath string) (string, error) {
+func (p *CustomPaths) StateDirFor(relDirPath StatePath) (string, error) {
 	return CustomStateDirFor(p.CustomHome, relDirPath)
 }
 
-func (p *CustomPaths) StatePathFor(relFilePath string) (string, error) {
+func (p *CustomPaths) StatePathFor(relFilePath StatePath) (string, error) {
 	return CustomStatePathFor(p.CustomHome, relFilePath)
 }
 
 // CustomCachePathFor builds the path for cache files at a given root path and
 // creates intermediate directories. It scoped the files under a "cache" folder,
 // and follow the default structure.
-func CustomCachePathFor(customHome, relFilePath string) (string, error) {
-	fullPath := filepath.Join(customHome, "cache", relFilePath)
+func CustomCachePathFor(customHome string, relFilePath CachePath) (string, error) {
+	fullPath := filepath.Join(customHome, "cache", relFilePath.String())
 	dir := filepath.Dir(fullPath)
 	if err := vgfs.EnsureDir(dir); err != nil {
 		return "", fmt.Errorf("couldn't create directories for %s: %w", dir, err)
@@ -70,8 +70,8 @@ func CustomCachePathFor(customHome, relFilePath string) (string, error) {
 // CustomCacheDirFor builds the path for cache directories at a given root path
 // and creates intermediate directories. It scoped the files under a "data"
 // folder, and follow the default structure.
-func CustomCacheDirFor(customHome, relDirPath string) (string, error) {
-	path := filepath.Join(customHome, "cache", relDirPath)
+func CustomCacheDirFor(customHome string, relDirPath CachePath) (string, error) {
+	path := filepath.Join(customHome, "cache", relDirPath.String())
 	if err := vgfs.EnsureDir(path); err != nil {
 		return "", fmt.Errorf("couldn't create directories for %s: %w", path, err)
 	}
@@ -81,8 +81,8 @@ func CustomCacheDirFor(customHome, relDirPath string) (string, error) {
 // CustomConfigPathFor builds the path for configuration files at a given root
 // path and creates intermediate directories. It scoped the files under a
 // "config" folder, and follow the default structure.
-func CustomConfigPathFor(customHome, relFilePath string) (string, error) {
-	fullPath := filepath.Join(customHome, "config", relFilePath)
+func CustomConfigPathFor(customHome string, relFilePath ConfigPath) (string, error) {
+	fullPath := filepath.Join(customHome, "config", relFilePath.String())
 	dir := filepath.Dir(fullPath)
 	if err := vgfs.EnsureDir(dir); err != nil {
 		return "", fmt.Errorf("couldn't create directories for %s: %w", dir, err)
@@ -93,8 +93,8 @@ func CustomConfigPathFor(customHome, relFilePath string) (string, error) {
 // CustomConfigDirFor builds the path for config directories at a given root path
 // and creates intermediate directories. It scoped the files under a "data"
 // folder, and follow the default structure.
-func CustomConfigDirFor(customHome, relDirPath string) (string, error) {
-	path := filepath.Join(customHome, "config", relDirPath)
+func CustomConfigDirFor(customHome string, relDirPath ConfigPath) (string, error) {
+	path := filepath.Join(customHome, "config", relDirPath.String())
 	if err := vgfs.EnsureDir(path); err != nil {
 		return "", fmt.Errorf("couldn't create directories for %s: %w", path, err)
 	}
@@ -104,8 +104,8 @@ func CustomConfigDirFor(customHome, relDirPath string) (string, error) {
 // CustomDataPathFor builds the path for data files at a given root path and
 // creates intermediate directories. It scoped the files under a "data" folder,
 // and follow the default structure.
-func CustomDataPathFor(customHome, relFilePath string) (string, error) {
-	fullPath := filepath.Join(customHome, "data", relFilePath)
+func CustomDataPathFor(customHome string, relFilePath DataPath) (string, error) {
+	fullPath := filepath.Join(customHome, "data", relFilePath.String())
 	dir := filepath.Dir(fullPath)
 	if err := vgfs.EnsureDir(dir); err != nil {
 		return "", fmt.Errorf("couldn't create directories for %s: %w", dir, err)
@@ -116,8 +116,8 @@ func CustomDataPathFor(customHome, relFilePath string) (string, error) {
 // CustomDataDirFor builds the path for data directories at a given root path
 // and creates intermediate directories. It scoped the files under a "data"
 // folder, and follow the default structure.
-func CustomDataDirFor(customHome, relDirPath string) (string, error) {
-	path := filepath.Join(customHome, "data", relDirPath)
+func CustomDataDirFor(customHome string, relDirPath DataPath) (string, error) {
+	path := filepath.Join(customHome, "data", relDirPath.String())
 	if err := vgfs.EnsureDir(path); err != nil {
 		return "", fmt.Errorf("couldn't create directories for %s: %w", path, err)
 	}
@@ -127,8 +127,8 @@ func CustomDataDirFor(customHome, relDirPath string) (string, error) {
 // CustomStatePathFor builds the path for cache files at a given root path and
 // creates intermediate directories. It scoped the files under a "cache" folder,
 // and follow the default structure.
-func CustomStatePathFor(customHome, relFilePath string) (string, error) {
-	fullPath := filepath.Join(customHome, "state", relFilePath)
+func CustomStatePathFor(customHome string, relFilePath StatePath) (string, error) {
+	fullPath := filepath.Join(customHome, "state", relFilePath.String())
 	dir := filepath.Dir(fullPath)
 	if err := vgfs.EnsureDir(dir); err != nil {
 		return "", fmt.Errorf("couldn't create directories for %s: %w", dir, err)
@@ -139,8 +139,8 @@ func CustomStatePathFor(customHome, relFilePath string) (string, error) {
 // CustomStateDirFor builds the path for data directories at a given root path
 // and creates intermediate directories. It scoped the files under a "data"
 // folder, and follow the default structure.
-func CustomStateDirFor(customHome, relDirPath string) (string, error) {
-	path := filepath.Join(customHome, "state", relDirPath)
+func CustomStateDirFor(customHome string, relDirPath StatePath) (string, error) {
+	path := filepath.Join(customHome, "state", relDirPath.String())
 	if err := vgfs.EnsureDir(path); err != nil {
 		return "", fmt.Errorf("couldn't create directories for %s: %w", path, err)
 	}

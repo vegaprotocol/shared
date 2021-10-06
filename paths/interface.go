@@ -1,14 +1,14 @@
 package paths
 
 type Paths interface {
-	CachePathFor(string) (string, error)
-	CacheDirFor(string) (string, error)
-	ConfigPathFor(string) (string, error)
-	ConfigDirFor(string) (string, error)
-	DataPathFor(string) (string, error)
-	DataDirFor(string) (string, error)
-	StatePathFor(string) (string, error)
-	StateDirFor(string) (string, error)
+	CachePathFor(CachePath) (string, error)
+	CacheDirFor(CachePath) (string, error)
+	ConfigPathFor(ConfigPath) (string, error)
+	ConfigDirFor(ConfigPath) (string, error)
+	DataPathFor(DataPath) (string, error)
+	DataDirFor(DataPath) (string, error)
+	StatePathFor(StatePath) (string, error)
+	StateDirFor(StatePath) (string, error)
 }
 
 func NewPaths(customHome string) Paths {
