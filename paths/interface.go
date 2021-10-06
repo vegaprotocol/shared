@@ -11,7 +11,10 @@ type Paths interface {
 	StateDirFor(StatePath) (string, error)
 }
 
-func NewPaths(customHome string) Paths {
+// New instantiates the specific implementation of the Paths interface based on
+// the value of the customHome. If a customHome is specified the custom
+// implementation CustomPaths is returned, the standard DefaultPaths otherwise.
+func New(customHome string) Paths {
 	if len(customHome) != 0 {
 		return &CustomPaths{
 			CustomHome: customHome,
