@@ -4,12 +4,32 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 
 	vgcrypto "code.vegaprotocol.io/shared/libs/crypto"
 	vgfs "code.vegaprotocol.io/shared/libs/fs"
 
 	"github.com/zannen/toml"
 )
+
+func FetchStructuredFile(url string, v interface{}) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("couldn't load file from %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("couldn't read HTTP response body: %w", err)
+	}
+	if _, err := toml.Decode(string(body), v); err != nil {
+		return fmt.Errorf("couldn't decode HTTP response body: %w", err)
+	}
+
+	return nil
+}
 
 func ReadStructuredFile(path string, v interface{}) error {
 	buf, err := vgfs.ReadFile(path)
