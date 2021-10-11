@@ -15,13 +15,13 @@ func TestNewPaths(t *testing.T) {
 }
 
 func testCreatingPathsWithoutPathReturnsDefaultImplementation(t *testing.T) {
-	p := paths.NewPaths("")
+	p := paths.New("")
 
 	assert.IsType(t, &paths.DefaultPaths{}, p)
 }
 
 func testCreatingPathsWithPathReturnsCustomImplementation(t *testing.T) {
-	p := paths.NewPaths(vgtest.RandomPath())
+	p := paths.New(vgtest.RandomPath())
 
 	assert.IsType(t, &paths.CustomPaths{}, p)
 }

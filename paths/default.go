@@ -35,42 +35,42 @@ import (
 
 type DefaultPaths struct{}
 
-func (p *DefaultPaths) CachePathFor(relFilePath string) (string, error) {
+func (p *DefaultPaths) CachePathFor(relFilePath CachePath) (string, error) {
 	return DefaultCachePathFor(relFilePath)
 }
 
-func (p *DefaultPaths) CacheDirFor(relDirPath string) (string, error) {
+func (p *DefaultPaths) CacheDirFor(relDirPath CachePath) (string, error) {
 	return DefaultCacheDirFor(relDirPath)
 }
 
-func (p *DefaultPaths) ConfigPathFor(relFilePath string) (string, error) {
+func (p *DefaultPaths) ConfigPathFor(relFilePath ConfigPath) (string, error) {
 	return DefaultConfigPathFor(relFilePath)
 }
 
-func (p *DefaultPaths) ConfigDirFor(relDirPath string) (string, error) {
+func (p *DefaultPaths) ConfigDirFor(relDirPath ConfigPath) (string, error) {
 	return DefaultConfigDirFor(relDirPath)
 }
 
-func (p *DefaultPaths) DataPathFor(relFilePath string) (string, error) {
+func (p *DefaultPaths) DataPathFor(relFilePath DataPath) (string, error) {
 	return DefaultDataPathFor(relFilePath)
 }
 
-func (p *DefaultPaths) DataDirFor(relDirPath string) (string, error) {
+func (p *DefaultPaths) DataDirFor(relDirPath DataPath) (string, error) {
 	return DefaultDataDirFor(relDirPath)
 }
 
-func (p *DefaultPaths) StatePathFor(relFilePath string) (string, error) {
+func (p *DefaultPaths) StatePathFor(relFilePath StatePath) (string, error) {
 	return DefaultStatePathFor(relFilePath)
 }
 
-func (p *DefaultPaths) StateDirFor(relDirPath string) (string, error) {
+func (p *DefaultPaths) StateDirFor(relDirPath StatePath) (string, error) {
 	return DefaultStateDirFor(relDirPath)
 }
 
 // DefaultCachePathFor builds the default path for cache files and creates
 // intermediate directories, if needed.
-func DefaultCachePathFor(relFilePath string) (string, error) {
-	path, err := xdg.CacheFile(filepath.Join(VegaHome, relFilePath))
+func DefaultCachePathFor(relFilePath CachePath) (string, error) {
+	path, err := xdg.CacheFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the default path for %s: %w", relFilePath, err)
 	}
@@ -79,9 +79,9 @@ func DefaultCachePathFor(relFilePath string) (string, error) {
 
 // DefaultCacheDirFor builds the default path for cache files and creates
 // intermediate directories, if needed.
-func DefaultCacheDirFor(relDirPath string) (string, error) {
+func DefaultCacheDirFor(relDirPath CachePath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
-	path, err := xdg.CacheFile(filepath.Join(VegaHome, relDirPath, "fake-file"))
+	path, err := xdg.CacheFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the default path for %s: %w", relDirPath, err)
 	}
@@ -90,8 +90,8 @@ func DefaultCacheDirFor(relDirPath string) (string, error) {
 
 // DefaultConfigPathFor builds the default path for configuration files and
 // creates intermediate directories, if needed.
-func DefaultConfigPathFor(relFilePath string) (string, error) {
-	path, err := xdg.ConfigFile(filepath.Join(VegaHome, relFilePath))
+func DefaultConfigPathFor(relFilePath ConfigPath) (string, error) {
+	path, err := xdg.ConfigFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the default path for %s: %w", relFilePath, err)
 	}
@@ -100,9 +100,9 @@ func DefaultConfigPathFor(relFilePath string) (string, error) {
 
 // DefaultConfigDirFor builds the default path for config files and creates
 // intermediate directories, if needed.
-func DefaultConfigDirFor(relDirPath string) (string, error) {
+func DefaultConfigDirFor(relDirPath ConfigPath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
-	path, err := xdg.ConfigFile(filepath.Join(VegaHome, relDirPath, "fake-file"))
+	path, err := xdg.ConfigFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the default path for %s: %w", relDirPath, err)
 	}
@@ -111,8 +111,8 @@ func DefaultConfigDirFor(relDirPath string) (string, error) {
 
 // DefaultDataPathFor builds the default path for data files and creates
 // intermediate directories, if needed.
-func DefaultDataPathFor(relFilePath string) (string, error) {
-	path, err := xdg.DataFile(filepath.Join(VegaHome, relFilePath))
+func DefaultDataPathFor(relFilePath DataPath) (string, error) {
+	path, err := xdg.DataFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the default path for %s: %w", relFilePath, err)
 	}
@@ -121,9 +121,9 @@ func DefaultDataPathFor(relFilePath string) (string, error) {
 
 // DefaultDataDirFor builds the default path for data files and creates
 // intermediate directories, if needed.
-func DefaultDataDirFor(relDirPath string) (string, error) {
+func DefaultDataDirFor(relDirPath DataPath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
-	path, err := xdg.DataFile(filepath.Join(VegaHome, relDirPath, "fake-file"))
+	path, err := xdg.DataFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the default path for %s: %w", relDirPath, err)
 	}
@@ -132,8 +132,8 @@ func DefaultDataDirFor(relDirPath string) (string, error) {
 
 // DefaultStatePathFor builds the default path for state files and creates
 // intermediate directories, if needed.
-func DefaultStatePathFor(relFilePath string) (string, error) {
-	path, err := xdg.StateFile(filepath.Join(VegaHome, relFilePath))
+func DefaultStatePathFor(relFilePath StatePath) (string, error) {
+	path, err := xdg.StateFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the default path for %s: %w", relFilePath, err)
 	}
@@ -142,9 +142,9 @@ func DefaultStatePathFor(relFilePath string) (string, error) {
 
 // DefaultStateDirFor builds the default path for state files and creates
 // intermediate directories, if needed.
-func DefaultStateDirFor(relDirPath string) (string, error) {
+func DefaultStateDirFor(relDirPath StatePath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
-	path, err := xdg.StateFile(filepath.Join(VegaHome, relDirPath, "fake-file"))
+	path, err := xdg.StateFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
 		return "", fmt.Errorf("couldn't get the default path for %s: %w", relDirPath, err)
 	}
