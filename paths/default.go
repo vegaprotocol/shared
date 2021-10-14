@@ -35,118 +35,182 @@ import (
 
 type DefaultPaths struct{}
 
-func (p *DefaultPaths) CachePathFor(relFilePath CachePath) (string, error) {
-	return DefaultCachePathFor(relFilePath)
-}
-
-func (p *DefaultPaths) CacheDirFor(relDirPath CachePath) (string, error) {
-	return DefaultCacheDirFor(relDirPath)
-}
-
-func (p *DefaultPaths) ConfigPathFor(relFilePath ConfigPath) (string, error) {
-	return DefaultConfigPathFor(relFilePath)
-}
-
-func (p *DefaultPaths) ConfigDirFor(relDirPath ConfigPath) (string, error) {
-	return DefaultConfigDirFor(relDirPath)
-}
-
-func (p *DefaultPaths) DataPathFor(relFilePath DataPath) (string, error) {
-	return DefaultDataPathFor(relFilePath)
-}
-
-func (p *DefaultPaths) DataDirFor(relDirPath DataPath) (string, error) {
-	return DefaultDataDirFor(relDirPath)
-}
-
-func (p *DefaultPaths) StatePathFor(relFilePath StatePath) (string, error) {
-	return DefaultStatePathFor(relFilePath)
-}
-
-func (p *DefaultPaths) StateDirFor(relDirPath StatePath) (string, error) {
-	return DefaultStateDirFor(relDirPath)
-}
-
-// DefaultCachePathFor builds the default path for cache files and creates
+// CreateCachePathFor builds the default path for a cache file and creates
 // intermediate directories, if needed.
-func DefaultCachePathFor(relFilePath CachePath) (string, error) {
+func (p *DefaultPaths) CreateCachePathFor(relFilePath CachePath) (string, error) {
+	return CreateDefaultCachePathFor(relFilePath)
+}
+
+// CreateCacheDirFor builds the default path for a cache directory and creates
+// it, along with intermediate directories, if needed.
+func (p *DefaultPaths) CreateCacheDirFor(relDirPath CachePath) (string, error) {
+	return CreateDefaultCacheDirFor(relDirPath)
+}
+
+// CreateConfigPathFor builds the default path for a configuration file and
+// creates intermediate directories, if needed.
+func (p *DefaultPaths) CreateConfigPathFor(relFilePath ConfigPath) (string, error) {
+	return CreateDefaultConfigPathFor(relFilePath)
+}
+
+// CreateConfigDirFor builds the default path for a config directory and creates
+// it, along with intermediate directories, if needed.
+func (p *DefaultPaths) CreateConfigDirFor(relDirPath ConfigPath) (string, error) {
+	return CreateDefaultConfigDirFor(relDirPath)
+}
+
+// CreateDataPathFor builds the default path for a data file and creates
+// intermediate directories, if needed.
+func (p *DefaultPaths) CreateDataPathFor(relFilePath DataPath) (string, error) {
+	return CreateDefaultDataPathFor(relFilePath)
+}
+
+// CreateDataDirFor builds the default path for a data directory and creates
+// it, along with intermediate directories, if needed.
+func (p *DefaultPaths) CreateDataDirFor(relDirPath DataPath) (string, error) {
+	return CreateDefaultDataDirFor(relDirPath)
+}
+
+// CreateStatePathFor builds the default path for a state file and creates
+// intermediate directories, if needed.
+func (p *DefaultPaths) CreateStatePathFor(relFilePath StatePath) (string, error) {
+	return CreateDefaultStatePathFor(relFilePath)
+}
+
+// CreateStateDirFor builds the default path for a state directory and creates
+// it, along with intermediate directories, if needed.
+func (p *DefaultPaths) CreateStateDirFor(relDirPath StatePath) (string, error) {
+	return CreateDefaultStateDirFor(relDirPath)
+}
+
+// CachePathFor build the default path for a cache file or directory. It
+// doesn't create any resources.
+func (p *DefaultPaths) CachePathFor(relPath CachePath) string {
+	return DefaultCachePathFor(relPath)
+}
+
+// ConfigPathFor build the default path for a config file or directory. It
+// doesn't create any resources.
+func (p *DefaultPaths) ConfigPathFor(relPath ConfigPath) string {
+	return DefaultConfigPathFor(relPath)
+}
+
+// DataPathFor build the default path for a data file or directory. It
+// doesn't create any resources.
+func (p *DefaultPaths) DataPathFor(relPath DataPath) string {
+	return DefaultDataPathFor(relPath)
+}
+
+// StatePathFor build the default path for a state file or directory. It
+// doesn't create any resources.
+func (p *DefaultPaths) StatePathFor(relPath StatePath) string {
+	return DefaultStatePathFor(relPath)
+}
+
+// CreateDefaultCachePathFor builds the default path for a cache file and creates
+// intermediate directories, if needed.
+func CreateDefaultCachePathFor(relFilePath CachePath) (string, error) {
 	path, err := xdg.CacheFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the default path for %s: %w", relFilePath, err)
+		return "", fmt.Errorf("couldn't create the default directory for file at %s: %w", relFilePath, err)
 	}
 	return path, nil
 }
 
-// DefaultCacheDirFor builds the default path for cache files and creates
-// intermediate directories, if needed.
-func DefaultCacheDirFor(relDirPath CachePath) (string, error) {
+// CreateDefaultCacheDirFor builds the default path for a cache directory and creates
+// it, along with intermediate directories, if needed.
+func CreateDefaultCacheDirFor(relDirPath CachePath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
 	path, err := xdg.CacheFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the default path for %s: %w", relDirPath, err)
+		return "", fmt.Errorf("couldn't create the default directory at %s: %w", relDirPath, err)
 	}
 	return filepath.Dir(path), nil
 }
 
-// DefaultConfigPathFor builds the default path for configuration files and
+// CreateDefaultConfigPathFor builds the default path for a configuration file and
 // creates intermediate directories, if needed.
-func DefaultConfigPathFor(relFilePath ConfigPath) (string, error) {
+func CreateDefaultConfigPathFor(relFilePath ConfigPath) (string, error) {
 	path, err := xdg.ConfigFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the default path for %s: %w", relFilePath, err)
+		return "", fmt.Errorf("couldn't create the default directory for file at %s: %w", relFilePath, err)
 	}
 	return path, nil
 }
 
-// DefaultConfigDirFor builds the default path for config files and creates
-// intermediate directories, if needed.
-func DefaultConfigDirFor(relDirPath ConfigPath) (string, error) {
+// CreateDefaultConfigDirFor builds the default path for a config directory and creates
+// it, along with intermediate directories, if needed.
+func CreateDefaultConfigDirFor(relDirPath ConfigPath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
 	path, err := xdg.ConfigFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the default path for %s: %w", relDirPath, err)
+		return "", fmt.Errorf("couldn't create the default directory at %s: %w", relDirPath, err)
 	}
 	return filepath.Dir(path), nil
 }
 
-// DefaultDataPathFor builds the default path for data files and creates
+// CreateDefaultDataPathFor builds the default path for a data file and creates
 // intermediate directories, if needed.
-func DefaultDataPathFor(relFilePath DataPath) (string, error) {
+func CreateDefaultDataPathFor(relFilePath DataPath) (string, error) {
 	path, err := xdg.DataFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the default path for %s: %w", relFilePath, err)
+		return "", fmt.Errorf("couldn't create the default directory for file at %s: %w", relFilePath, err)
 	}
 	return path, nil
 }
 
-// DefaultDataDirFor builds the default path for data files and creates
-// intermediate directories, if needed.
-func DefaultDataDirFor(relDirPath DataPath) (string, error) {
+// CreateDefaultDataDirFor builds the default path for a data directory and creates
+// it, along with intermediate directories, if needed.
+func CreateDefaultDataDirFor(relDirPath DataPath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
 	path, err := xdg.DataFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the default path for %s: %w", relDirPath, err)
+		return "", fmt.Errorf("couldn't create the default directory at %s: %w", relDirPath, err)
 	}
 	return filepath.Dir(path), nil
 }
 
-// DefaultStatePathFor builds the default path for state files and creates
+// CreateDefaultStatePathFor builds the default path for a state file and creates
 // intermediate directories, if needed.
-func DefaultStatePathFor(relFilePath StatePath) (string, error) {
+func CreateDefaultStatePathFor(relFilePath StatePath) (string, error) {
 	path, err := xdg.StateFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the default path for %s: %w", relFilePath, err)
+		return "", fmt.Errorf("couldn't create the default directory for file at %s: %w", relFilePath, err)
 	}
 	return path, nil
 }
 
-// DefaultStateDirFor builds the default path for state files and creates
-// intermediate directories, if needed.
-func DefaultStateDirFor(relDirPath StatePath) (string, error) {
+// CreateDefaultStateDirFor builds the default path for a state directory and creates
+// it, along with intermediate directories, if needed.
+func CreateDefaultStateDirFor(relDirPath StatePath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
 	path, err := xdg.StateFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
-		return "", fmt.Errorf("couldn't get the default path for %s: %w", relDirPath, err)
+		return "", fmt.Errorf("couldn't create the default directory at %s: %w", relDirPath, err)
 	}
 	return filepath.Dir(path), nil
+}
+
+// DefaultCachePathFor build the default path for a cache file or directory. It
+// doesn't create any resources.
+func DefaultCachePathFor(relPath CachePath) string {
+	return filepath.Join(xdg.CacheHome, VegaHome, relPath.String())
+}
+
+// DefaultConfigPathFor build the default path for a config file or directory.
+// It doesn't create any resources.
+func DefaultConfigPathFor(relPath ConfigPath) string {
+	return filepath.Join(xdg.ConfigHome, VegaHome, relPath.String())
+}
+
+// DefaultDataPathFor build the default path for a data file or directory. It
+// doesn't create any resources.
+func DefaultDataPathFor(relPath DataPath) string {
+	return filepath.Join(xdg.DataHome, VegaHome, relPath.String())
+}
+
+// DefaultStatePathFor build the default path for a state file or directory. It
+// doesn't create any resources.
+func DefaultStatePathFor(relPath StatePath) string {
+	return filepath.Join(xdg.StateHome, VegaHome, relPath.String())
 }
