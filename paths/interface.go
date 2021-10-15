@@ -1,14 +1,18 @@
 package paths
 
 type Paths interface {
-	CachePathFor(CachePath) (string, error)
-	CacheDirFor(CachePath) (string, error)
-	ConfigPathFor(ConfigPath) (string, error)
-	ConfigDirFor(ConfigPath) (string, error)
-	DataPathFor(DataPath) (string, error)
-	DataDirFor(DataPath) (string, error)
-	StatePathFor(StatePath) (string, error)
-	StateDirFor(StatePath) (string, error)
+	CreateCachePathFor(CachePath) (string, error)
+	CreateCacheDirFor(CachePath) (string, error)
+	CreateConfigPathFor(ConfigPath) (string, error)
+	CreateConfigDirFor(ConfigPath) (string, error)
+	CreateDataPathFor(DataPath) (string, error)
+	CreateDataDirFor(DataPath) (string, error)
+	CreateStatePathFor(StatePath) (string, error)
+	CreateStateDirFor(StatePath) (string, error)
+	CachePathFor(CachePath) string
+	ConfigPathFor(ConfigPath) string
+	DataPathFor(DataPath) string
+	StatePathFor(StatePath) string
 }
 
 // New instantiates the specific implementation of the Paths interface based on

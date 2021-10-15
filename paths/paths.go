@@ -18,8 +18,22 @@ func (p CachePath) String() string {
 	return string(p)
 }
 
+// JoinCachePath joins any number of path elements with a root CachePath into a
+// single path, separating them with an OS specific Separator, and returns it
+// as a CachePath.
+func JoinCachePath(p CachePath, elem ...string) CachePath {
+	return CachePath(JoinCachePathStr(p, elem...))
+}
+
+// JoinCachePathStr joins any number of path elements with a root CachePath
+// into a single path, separating them with an OS specific Separator, and
+// returns it as a string.
+func JoinCachePathStr(p CachePath, elem ...string) string {
+	return filepath.Join(append([]string{string(p)}, elem...)...)
+}
+
 var (
-	// DataNodeCacheHome is the folder containing the data dedicated to the
+	// DataNodeCacheHome is the folder containing the cache used by the
 	// data-node.
 	DataNodeCacheHome = CachePath("data-node")
 )
@@ -27,9 +41,6 @@ var (
 // File structure for configuration
 //
 // CONFIG_PATH
-// 	├── console/
-// 	│	├── config.toml
-// 	│	└── proxy.toml
 // 	├── data-node/
 // 	│	└── config.toml
 // 	├── faucet/
@@ -39,7 +50,7 @@ var (
 // 	│	└── wallets.toml
 // 	├── wallet-cli/
 // 	│	└── config.toml
-// 	├── wallet-desktop/
+// 	├── wallet-app/
 // 	│	└── config.toml
 // 	└── wallet-service/
 // 		└── networks/
@@ -50,68 +61,70 @@ func (p ConfigPath) String() string {
 	return string(p)
 }
 
+// JoinConfigPath joins any number of path elements with a root ConfigPath into a
+// single path, separating them with an OS specific Separator, and returns it
+// as a ConfigPath.
+func JoinConfigPath(p ConfigPath, elem ...string) ConfigPath {
+	return ConfigPath(JoinConfigPathStr(p, elem...))
+}
+
+// JoinConfigPathStr joins any number of path elements with a root ConfigPath
+// into a single path, separating them with an OS specific Separator, and
+// returns it as a string.
+func JoinConfigPathStr(p ConfigPath, elem ...string) string {
+	return filepath.Join(append([]string{string(p)}, elem...)...)
+}
+
 var (
-	// ConsoleConfigHome is the folder containing the configuration files
-	// dedicated to the console.
-	ConsoleConfigHome = ConfigPath("console")
-
-	// ConsoleDefaultConfigFile is the default configuration file for the
-	// console.
-	ConsoleDefaultConfigFile = ConfigPath(filepath.Join(ConsoleConfigHome.String(), "config.toml"))
-
-	// ConsoleProxyConfigFile is the configuration file for the
-	// console proxy.
-	ConsoleProxyConfigFile = ConfigPath(filepath.Join(ConsoleConfigHome.String(), "proxy.toml"))
-
 	// DataNodeConfigHome is the folder containing the configuration files
-	// dedicated to the node.
+	// used by the node.
 	DataNodeConfigHome = ConfigPath("data-node")
 
 	// DataNodeDefaultConfigFile is the default configuration file for the
 	// data-node.
-	DataNodeDefaultConfigFile = ConfigPath(filepath.Join(DataNodeConfigHome.String(), "config.toml"))
+	DataNodeDefaultConfigFile = JoinConfigPath(DataNodeConfigHome, "config.toml")
 
 	// FaucetConfigHome is the folder containing the configuration files
-	// dedicated to the node.
+	// used by the node.
 	FaucetConfigHome = ConfigPath("faucet")
 
 	// FaucetDefaultConfigFile is the default configuration file for the
 	// data-node.
-	FaucetDefaultConfigFile = ConfigPath(filepath.Join(FaucetConfigHome.String(), "config.toml"))
+	FaucetDefaultConfigFile = JoinConfigPath(FaucetConfigHome, "config.toml")
 
-	// NodeConfigHome is the folder containing the configuration files dedicated
-	// to the node.
+	// NodeConfigHome is the folder containing the configuration files used by
+	// the node.
 	NodeConfigHome = ConfigPath("node")
 
 	// NodeDefaultConfigFile is the default configuration file for the node.
-	NodeDefaultConfigFile = ConfigPath(filepath.Join(NodeConfigHome.String(), "config.toml"))
+	NodeDefaultConfigFile = JoinConfigPath(NodeConfigHome, "config.toml")
 
 	// NodeWalletsConfigFile is the configuration file for the node wallets.
-	NodeWalletsConfigFile = ConfigPath(filepath.Join(NodeConfigHome.String(), "wallets.encrypted"))
+	NodeWalletsConfigFile = JoinConfigPath(NodeConfigHome, "wallets.encrypted")
 
 	// WalletCLIConfigHome is the folder containing the configuration files
-	// dedicated to the wallet CLI.
+	// used by the wallet CLI.
 	WalletCLIConfigHome = ConfigPath("wallet-cli")
 
 	// WalletCLIDefaultConfigFile is the default configuration file for the
 	// wallet CLI.
-	WalletCLIDefaultConfigFile = ConfigPath(filepath.Join(WalletCLIConfigHome.String(), "config.toml"))
+	WalletCLIDefaultConfigFile = JoinConfigPath(WalletCLIConfigHome, "config.toml")
 
-	// WalletDesktopConfigHome is the folder containing the configuration files
-	// dedicated to the wallet desktop application.
-	WalletDesktopConfigHome = ConfigPath("wallet-desktop")
+	// WalletAppConfigHome is the folder containing the configuration files
+	// used by the wallet app application.
+	WalletAppConfigHome = ConfigPath("wallet-app")
 
-	// WalletDesktopDefaultConfigFile is the default configuration file for the
-	// wallet desktop application.
-	WalletDesktopDefaultConfigFile = ConfigPath(filepath.Join(WalletDesktopConfigHome.String(), "config.toml"))
+	// WalletAppDefaultConfigFile is the default configuration file for the
+	// wallet app application.
+	WalletAppDefaultConfigFile = JoinConfigPath(WalletAppConfigHome, "config.toml")
 
 	// WalletServiceConfigHome is the folder containing the configuration files
-	// dedicated to the wallet service application.
+	// used by the wallet service application.
 	WalletServiceConfigHome = ConfigPath("wallet-service")
 
 	// WalletServiceNetworksConfigHome is the folder containing the
-	// configuration files dedicated to the networks.
-	WalletServiceNetworksConfigHome = ConfigPath(filepath.Join(WalletServiceConfigHome.String(), "networks"))
+	// configuration files used by the networks.
+	WalletServiceNetworksConfigHome = JoinConfigPath(WalletServiceConfigHome, "networks")
 )
 
 // File structure for data
@@ -140,33 +153,47 @@ func (p DataPath) String() string {
 	return string(p)
 }
 
+// JoinDataPath joins any number of path elements with a root DataPath into a
+// single path, separating them with an OS specific Separator, and returns it
+// as a DataPath.
+func JoinDataPath(p DataPath, elem ...string) DataPath {
+	return DataPath(JoinDataPathStr(p, elem...))
+}
+
+// JoinDataPathStr joins any number of path elements with a root DataPath
+// into a single path, separating them with an OS specific Separator, and
+// returns it as a string.
+func JoinDataPathStr(p DataPath, elem ...string) string {
+	return filepath.Join(append([]string{string(p)}, elem...)...)
+}
+
 var (
-	// NodeDataHome is the folder containing the data dedicated to the node.
+	// NodeDataHome is the folder containing the data used by the node.
 	NodeDataHome = DataPath("node")
 
-	// NodeWalletsDataHome is the folder containing the data dedicated to the
+	// NodeWalletsDataHome is the folder containing the data used by the
 	// node wallets.
 	NodeWalletsDataHome = DataPath(filepath.Join(NodeDataHome.String(), "wallets"))
 
 	// VegaNodeWalletsDataHome is the folder containing the vega wallet
-	// dedicated to the node.
+	// used by the node.
 	VegaNodeWalletsDataHome = DataPath(filepath.Join(NodeWalletsDataHome.String(), "vega"))
 
 	// EthereumNodeWalletsDataHome is the folder containing the ethereum wallet
-	// dedicated to the node.
+	// used by the node.
 	EthereumNodeWalletsDataHome = DataPath(filepath.Join(NodeWalletsDataHome.String(), "ethereum"))
 
-	// FaucetDataHome is the folder containing the data dedicated to the faucet.
+	// FaucetDataHome is the folder containing the data used by the faucet.
 	FaucetDataHome = DataPath("faucet")
 
-	// FaucetWalletsDataHome is the folder containing the data dedicated to the
+	// FaucetWalletsDataHome is the folder containing the data used by the
 	// faucet wallets.
 	FaucetWalletsDataHome = DataPath(filepath.Join(FaucetDataHome.String(), "wallets"))
 
 	// WalletsDataHome is the folder containing the user wallets.
 	WalletsDataHome = DataPath("wallets")
 
-	// WalletServiceDataHome is the folder containing the data dedicated to the
+	// WalletServiceDataHome is the folder containing the data used by the
 	// wallet service.
 	WalletServiceDataHome = DataPath("wallet-service")
 
@@ -193,10 +220,10 @@ var (
 // 	│	├── logs/
 // 	│	├── checkpoints/
 // 	│	└── snapshots/
-// 			└── ldb
+// 	│		└── ldb
 // 	├── wallet-cli/
 // 	│	└── logs/
-// 	├── wallet-desktop/
+// 	├── wallet-app/
 // 	│	└── logs/
 // 	└── wallet-service/
 // 		└── logs/
@@ -207,8 +234,22 @@ func (p StatePath) String() string {
 	return string(p)
 }
 
+// JoinStatePath joins any number of path elements with a root StatePath into a
+// single path, separating them with an OS specific Separator, and returns it
+// as a StatePath.
+func JoinStatePath(p StatePath, elem ...string) StatePath {
+	return StatePath(JoinStatePathStr(p, elem...))
+}
+
+// JoinStatePathStr joins any number of path elements with a root StatePath
+// into a single path, separating them with an OS specific Separator, and
+// returns it as a string.
+func JoinStatePathStr(p StatePath, elem ...string) string {
+	return filepath.Join(append([]string{string(p)}, elem...)...)
+}
+
 var (
-	// DataNodeStateHome is the folder containing the state dedicated to the
+	// DataNodeStateHome is the folder containing the state used by the
 	// data-node.
 	DataNodeStateHome = StatePath("data-node")
 
@@ -242,13 +283,13 @@ var (
 	// WalletCLILogsHome is the folder containing the logs of the wallet CLI.
 	WalletCLILogsHome = StatePath(filepath.Join(WalletCLIStateHome.String(), "logs"))
 
-	// WalletDesktopStateHome is the folder containing the state of the wallet
-	// desktop.
-	WalletDesktopStateHome = StatePath("wallet-desktop")
+	// WalletAppStateHome is the folder containing the state of the wallet
+	// app.
+	WalletAppStateHome = StatePath("wallet-app")
 
-	// WalletDesktopLogsHome is the folder containing the logs of the wallet
-	// desktop.
-	WalletDesktopLogsHome = StatePath(filepath.Join(WalletDesktopStateHome.String(), "logs"))
+	// WalletAppLogsHome is the folder containing the logs of the wallet
+	// app.
+	WalletAppLogsHome = StatePath(filepath.Join(WalletAppStateHome.String(), "logs"))
 
 	// WalletServiceStateHome is the folder containing the state of the node.
 	WalletServiceStateHome = StatePath("wallet-service")
