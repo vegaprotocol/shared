@@ -10,7 +10,7 @@ import (
 	vgcrypto "code.vegaprotocol.io/shared/libs/crypto"
 	vgfs "code.vegaprotocol.io/shared/libs/fs"
 
-	"github.com/zannen/toml"
+	"github.com/BurntSushi/toml"
 )
 
 func FetchStructuredFile(url string, v interface{}) error {
