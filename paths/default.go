@@ -112,7 +112,7 @@ func (p *DefaultPaths) StatePathFor(relPath StatePath) string {
 func CreateDefaultCachePathFor(relFilePath CachePath) (string, error) {
 	path, err := xdg.CacheFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
-		return "", fmt.Errorf("couldn't create the default directory for file at %s: %w", relFilePath, err)
+		return "", fmt.Errorf("couldn't create the default directory for file: %w", err)
 	}
 	return path, nil
 }
@@ -123,7 +123,7 @@ func CreateDefaultCacheDirFor(relDirPath CachePath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
 	path, err := xdg.CacheFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
-		return "", fmt.Errorf("couldn't create the default directory at %s: %w", relDirPath, err)
+		return "", fmt.Errorf("couldn't create the default directory: %w", err)
 	}
 	return filepath.Dir(path), nil
 }
@@ -133,7 +133,7 @@ func CreateDefaultCacheDirFor(relDirPath CachePath) (string, error) {
 func CreateDefaultConfigPathFor(relFilePath ConfigPath) (string, error) {
 	path, err := xdg.ConfigFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
-		return "", fmt.Errorf("couldn't create the default directory for file at %s: %w", relFilePath, err)
+		return "", fmt.Errorf("couldn't create the default directory for file: %w", err)
 	}
 	return path, nil
 }
@@ -144,7 +144,7 @@ func CreateDefaultConfigDirFor(relDirPath ConfigPath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
 	path, err := xdg.ConfigFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
-		return "", fmt.Errorf("couldn't create the default directory at %s: %w", relDirPath, err)
+		return "", fmt.Errorf("couldn't create the default directory: %w", err)
 	}
 	return filepath.Dir(path), nil
 }
@@ -154,7 +154,7 @@ func CreateDefaultConfigDirFor(relDirPath ConfigPath) (string, error) {
 func CreateDefaultDataPathFor(relFilePath DataPath) (string, error) {
 	path, err := xdg.DataFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
-		return "", fmt.Errorf("couldn't create the default directory for file at %s: %w", relFilePath, err)
+		return "", fmt.Errorf("couldn't create the default directory for file: %w", err)
 	}
 	return path, nil
 }
@@ -165,7 +165,7 @@ func CreateDefaultDataDirFor(relDirPath DataPath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
 	path, err := xdg.DataFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
-		return "", fmt.Errorf("couldn't create the default directory at %s: %w", relDirPath, err)
+		return "", fmt.Errorf("couldn't create the default directory: %w", err)
 	}
 	return filepath.Dir(path), nil
 }
@@ -175,7 +175,7 @@ func CreateDefaultDataDirFor(relDirPath DataPath) (string, error) {
 func CreateDefaultStatePathFor(relFilePath StatePath) (string, error) {
 	path, err := xdg.StateFile(filepath.Join(VegaHome, relFilePath.String()))
 	if err != nil {
-		return "", fmt.Errorf("couldn't create the default directory for file at %s: %w", relFilePath, err)
+		return "", fmt.Errorf("couldn't create the default directory for file: %w", err)
 	}
 	return path, nil
 }
@@ -186,7 +186,7 @@ func CreateDefaultStateDirFor(relDirPath StatePath) (string, error) {
 	// We append fake-file to xdg library creates all directory up to fake-file.
 	path, err := xdg.StateFile(filepath.Join(VegaHome, relDirPath.String(), "fake-file"))
 	if err != nil {
-		return "", fmt.Errorf("couldn't create the default directory at %s: %w", relDirPath, err)
+		return "", fmt.Errorf("couldn't create the default directory: %w", err)
 	}
 	return filepath.Dir(path), nil
 }

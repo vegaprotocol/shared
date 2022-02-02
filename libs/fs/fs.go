@@ -1,11 +1,14 @@
 package fs
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 )
+
+var ErrIsADirectory = errors.New("is a directory")
 
 // EnsureDir will make sure a directory exists or is created at the given path.
 func EnsureDir(path string) error {
@@ -37,7 +40,7 @@ func FileExists(path string) (bool, error) {
 	fileInfo, err := os.Stat(path)
 	if err == nil {
 		if fileInfo.IsDir() {
-			return false, fmt.Errorf("%s is a directory", path)
+			return false, ErrIsADirectory
 		}
 		return true, nil
 	}
@@ -55,7 +58,7 @@ func ReadFile(path string) ([]byte, error) {
 
 	buf, err := fs.ReadFile(os.DirFS(dir), fileName)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't read file at %s: %w", path, err)
+		return nil, fmt.Errorf("couldn't read file: %w", err)
 	}
 
 	return buf, nil
@@ -64,13 +67,13 @@ func ReadFile(path string) ([]byte, error) {
 func WriteFile(path string, content []byte) error {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		return fmt.Errorf("couldn't create file at %s: %w", path, err)
+		return fmt.Errorf("couldn't create file: %w", err)
 	}
 	defer f.Close()
 
 	_, err = f.Write(content)
 	if err != nil {
-		return fmt.Errorf("couldn't write file at %s: %w", path, err)
+		return fmt.Errorf("couldn't write file: %w", err)
 	}
 
 	return nil

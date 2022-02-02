@@ -16,7 +16,7 @@ import (
 func FetchStructuredFile(url string, v interface{}) error {
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("couldn't load file from %s: %w", url, err)
+		return fmt.Errorf("couldn't load file: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -34,7 +34,7 @@ func FetchStructuredFile(url string, v interface{}) error {
 func ReadStructuredFile(path string, v interface{}) error {
 	buf, err := vgfs.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("couldn't read file at %s: %w", path, err)
+		return fmt.Errorf("couldn't read file: %w", err)
 	}
 
 	if _, err := toml.Decode(string(buf), v); err != nil {
@@ -51,7 +51,7 @@ func WriteStructuredFile(path string, v interface{}) error {
 	}
 
 	if err := vgfs.WriteFile(path, buf.Bytes()); err != nil {
-		return fmt.Errorf("couldn't write file at %s: %w", path, err)
+		return fmt.Errorf("couldn't write file: %w", err)
 	}
 
 	return nil
@@ -60,7 +60,7 @@ func WriteStructuredFile(path string, v interface{}) error {
 func ReadEncryptedFile(path string, passphrase string, v interface{}) error {
 	encryptedBuf, err := vgfs.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("couldn't read secure file at %s: %w", path, err)
+		return fmt.Errorf("couldn't read secure file: %w", err)
 	}
 
 	buf, err := vgcrypto.Decrypt(encryptedBuf, passphrase)
@@ -88,7 +88,7 @@ func WriteEncryptedFile(path string, passphrase string, v interface{}) error {
 	}
 
 	if err := vgfs.WriteFile(path, encryptedBuf); err != nil {
-		return fmt.Errorf("couldn't write secure file at %s: %w", path, err)
+		return fmt.Errorf("couldn't write secure file: %w", err)
 	}
 
 	return nil
