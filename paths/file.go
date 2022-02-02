@@ -3,6 +3,7 @@ package paths
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,6 +14,11 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+var (
+	ErrEmptyResponse = errors.New("empty response")
+	ErrEmptyFile     = errors.New("empty file")
+)
+
 func FetchStructuredFile(url string, v interface{}) error {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -20,12 +26,21 @@ func FetchStructuredFile(url string, v interface{}) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return errors.New(http.StatusText(resp.StatusCode))
+	}
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("couldn't read HTTP response body: %w", err)
 	}
+
+	if len(body) == 0 {
+		return ErrEmptyResponse
+	}
+
 	if _, err := toml.Decode(string(body), v); err != nil {
-		return fmt.Errorf("couldn't decode HTTP response body: %w", err)
+		return fmt.Errorf("invalid TOML document: %w", err)
 	}
 
 	return nil
@@ -37,8 +52,12 @@ func ReadStructuredFile(path string, v interface{}) error {
 		return fmt.Errorf("couldn't read file: %w", err)
 	}
 
+	if len(buf) == 0 {
+		return ErrEmptyFile
+	}
+
 	if _, err := toml.Decode(string(buf), v); err != nil {
-		return fmt.Errorf("couldn't decode buffer: %w", err)
+		return fmt.Errorf("invalid TOML file: %w", err)
 	}
 
 	return nil
@@ -47,7 +66,7 @@ func ReadStructuredFile(path string, v interface{}) error {
 func WriteStructuredFile(path string, v interface{}) error {
 	buf := new(bytes.Buffer)
 	if err := toml.NewEncoder(buf).Encode(v); err != nil {
-		return fmt.Errorf("couldn't encode buffer: %w", err)
+		return fmt.Errorf("couldn't encode to TOML: %w", err)
 	}
 
 	if err := vgfs.WriteFile(path, buf.Bytes()); err != nil {
@@ -65,12 +84,12 @@ func ReadEncryptedFile(path string, passphrase string, v interface{}) error {
 
 	buf, err := vgcrypto.Decrypt(encryptedBuf, passphrase)
 	if err != nil {
-		return fmt.Errorf("couldn't decrypt buffer: %w", err)
+		return fmt.Errorf("couldn't decrypt content: %w", err)
 	}
 
 	err = json.Unmarshal(buf, v)
 	if err != nil {
-		return fmt.Errorf("couldn't unmarshal object: %w", err)
+		return fmt.Errorf("couldn't unmarshal content: %w", err)
 	}
 
 	return nil
@@ -79,12 +98,12 @@ func ReadEncryptedFile(path string, passphrase string, v interface{}) error {
 func WriteEncryptedFile(path string, passphrase string, v interface{}) error {
 	buf, err := json.Marshal(v)
 	if err != nil {
-		return fmt.Errorf("couldn't marshal object: %w", err)
+		return fmt.Errorf("couldn't marshal content: %w", err)
 	}
 
 	encryptedBuf, err := vgcrypto.Encrypt(buf, passphrase)
 	if err != nil {
-		return fmt.Errorf("couldn't encrypt buffer: %w", err)
+		return fmt.Errorf("couldn't encrypt content: %w", err)
 	}
 
 	if err := vgfs.WriteFile(path, encryptedBuf); err != nil {
