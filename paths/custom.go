@@ -102,7 +102,7 @@ func CreateCustomCachePathFor(customHome string, relFilePath CachePath) (string,
 	fullPath := CustomCachePathFor(customHome, relFilePath)
 	dir := filepath.Dir(fullPath)
 	if err := vgfs.EnsureDir(dir); err != nil {
-		return "", fmt.Errorf("couldn't create directories for file at %s: %w", dir, err)
+		return "", fmt.Errorf("couldn't create directories for file: %w", err)
 	}
 	return fullPath, nil
 }
@@ -113,7 +113,7 @@ func CreateCustomCachePathFor(customHome string, relFilePath CachePath) (string,
 func CreateCustomCacheDirFor(customHome string, relDirPath CachePath) (string, error) {
 	path := CustomCachePathFor(customHome, relDirPath)
 	if err := vgfs.EnsureDir(path); err != nil {
-		return "", fmt.Errorf("couldn't create directories at %s: %w", path, err)
+		return "", fmt.Errorf("couldn't create directories: %w", err)
 	}
 	return path, nil
 }
@@ -125,7 +125,7 @@ func CreateCustomConfigPathFor(customHome string, relFilePath ConfigPath) (strin
 	fullPath := CustomConfigPathFor(customHome, relFilePath)
 	dir := filepath.Dir(fullPath)
 	if err := vgfs.EnsureDir(dir); err != nil {
-		return "", fmt.Errorf("couldn't create directories for file at %s: %w", dir, err)
+		return "", fmt.Errorf("couldn't create directories for file: %w", err)
 	}
 	return fullPath, nil
 }
@@ -136,7 +136,7 @@ func CreateCustomConfigPathFor(customHome string, relFilePath ConfigPath) (strin
 func CreateCustomConfigDirFor(customHome string, relDirPath ConfigPath) (string, error) {
 	path := CustomConfigPathFor(customHome, relDirPath)
 	if err := vgfs.EnsureDir(path); err != nil {
-		return "", fmt.Errorf("couldn't create directories at %s: %w", path, err)
+		return "", fmt.Errorf("couldn't create directories: %w", err)
 	}
 	return path, nil
 }
@@ -148,7 +148,7 @@ func CreateCustomDataPathFor(customHome string, relFilePath DataPath) (string, e
 	fullPath := CustomDataPathFor(customHome, relFilePath)
 	dir := filepath.Dir(fullPath)
 	if err := vgfs.EnsureDir(dir); err != nil {
-		return "", fmt.Errorf("couldn't create directories for file at %s: %w", dir, err)
+		return "", fmt.Errorf("couldn't create directories for file: %w", err)
 	}
 	return fullPath, nil
 }
@@ -159,7 +159,7 @@ func CreateCustomDataPathFor(customHome string, relFilePath DataPath) (string, e
 func CreateCustomDataDirFor(customHome string, relDirPath DataPath) (string, error) {
 	path := CustomDataPathFor(customHome, relDirPath)
 	if err := vgfs.EnsureDir(path); err != nil {
-		return "", fmt.Errorf("couldn't create directories at %s: %w", path, err)
+		return "", fmt.Errorf("couldn't create directories: %w", err)
 	}
 	return path, nil
 }
@@ -171,7 +171,7 @@ func CreateCustomStatePathFor(customHome string, relFilePath StatePath) (string,
 	fullPath := CustomStatePathFor(customHome, relFilePath)
 	dir := filepath.Dir(fullPath)
 	if err := vgfs.EnsureDir(dir); err != nil {
-		return "", fmt.Errorf("couldn't create directories for file at %s: %w", dir, err)
+		return "", fmt.Errorf("couldn't create directories for file: %w", err)
 	}
 	return fullPath, nil
 }
@@ -182,7 +182,7 @@ func CreateCustomStatePathFor(customHome string, relFilePath StatePath) (string,
 func CreateCustomStateDirFor(customHome string, relDirPath StatePath) (string, error) {
 	path := CustomStatePathFor(customHome, relDirPath)
 	if err := vgfs.EnsureDir(path); err != nil {
-		return "", fmt.Errorf("couldn't create directories at %s: %w", path, err)
+		return "", fmt.Errorf("couldn't create directories: %w", err)
 	}
 	return path, nil
 }
