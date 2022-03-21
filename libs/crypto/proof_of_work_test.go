@@ -46,6 +46,24 @@ func TestVerify(t *testing.T) {
 	require.True(t, true, success)
 }
 
+func TestCountZeros(t *testing.T) {
+	// 00000e31f8ac983354f5885d46b7631bc75f69ec82e8f6178bae53db0ab7e054
+	_, h1, _ := crypto.PoW("2E7A16D9EF690F0D2BEED115FBA13BA2AAA16C8F971910AD88C72B9DB010C7D4", "DFE522E234D67E6AE3F017859F898E576B3928EA57310B765398615A0D3FDE2F", 20, crypto.Sha3)
+	require.Equal(t, byte(20), crypto.CountZeros(h1))
+
+	// 0000077b7d66117b57e45ccba0c31554e61c9853cc1cd9a2cf09c41b0aa9c22e
+	_, h2, _ := crypto.PoW("2E7A16D9EF690F0D2BEED115FBA13BA2AAA16C8F971910AD88C72B9DB010C7D4", "5B87F9DFA41DABE84A11CA78D9FE11DA8FC2AA926004CA66454A7AF0A206480D", 21, crypto.Sha3)
+	require.Equal(t, byte(21), crypto.CountZeros(h2))
+
+	// 000003bbf0cde49e3899ad23282b18defbc12a65f07c95d768464b87024df368
+	_, h3, _ := crypto.PoW("2E7A16D9EF690F0D2BEED115FBA13BA2AAA16C8F971910AD88C72B9DB010C7D4", "B14DD602ED48C9F7B5367105A4A97FFC9199EA0C9E1490B786534768DD1538EF", 22, crypto.Sha3)
+	require.Equal(t, byte(22), crypto.CountZeros(h3))
+
+	// 000001c297318619efd60b9197f89e36fea83ca8d7461cf7b7c78af84e0a3b51
+	_, h4, _ := crypto.PoW("B14DD602ED48C9F7B5367105A4A97FFC9199EA0C9E1490B786534768DD1538EF", "94A9CB1532011081B013CCD8E6AAA832CAB1CBA603F0C5A093B14C4961E5E7F0", 23, crypto.Sha3)
+	require.Equal(t, byte(23), crypto.CountZeros(h4))
+}
+
 func TestDifficulty(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -102,6 +120,10 @@ func TestDifficulty(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.nonce, n)
 			require.Equal(t, string(tt.proof), hex.EncodeToString(h))
+
+			b, d := crypto.Verify(tt.blockHash, tt.tid, tt.nonce, crypto.Sha3, tt.difficulty)
+			require.Equal(t, true, b)
+			require.True(t, d >= byte(tt.difficulty))
 		})
 	}
 }
