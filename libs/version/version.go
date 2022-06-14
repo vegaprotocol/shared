@@ -8,46 +8,43 @@ import (
 )
 
 // ReleasesGetter return the list of releases as semantic version strings
-type ReleasesGetter func() ([]string, error)
+type ReleasesGetter func() ([]*Version, error)
 
 // IsUnreleased tells if the version in parameter is an unreleased version or
 // not. An unreleased version is a development version from the semantic
 // versioning point of view.
+// This doesn't probe GitHub for its metadata on the version, and this is
+// intended. A release flagged as a pre-release in GitHub is just to mark mainnet
+// incompatibility.
 func IsUnreleased(version string) bool {
-	v, err := extractVersionFromRelease(version)
+	v, err := NewVersionFromString(version)
 	if err != nil {
 		// unsupported version, considered unreleased
 		return true
 	}
 
-	return v.isDevelopmentVersion
+	return !v.IsReleased
 }
 
 // Check returns a newer version, or an error or nil for both if no error
 // happened, and no updates are needed.
 func Check(releasesGetterFn ReleasesGetter, currentRelease string) (*semver.Version, error) {
-	releases, err := releasesGetterFn()
-	if err != nil {
-		return nil, fmt.Errorf("couldn't get releases: %w", err)
-	}
-
-	currentVersion, err := extractVersionFromRelease(currentRelease)
+	currentVersion, err := NewVersionFromString(currentRelease)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't extract version from release: %w", err)
 	}
 	latestVersion := currentVersion
 
-	var updateAvailable bool
-	for _, release := range releases {
-		comparedVersion, err := extractVersionFromRelease(release)
-		if err != nil {
-			// unsupported version
-			continue
-		}
+	releases, err := releasesGetterFn()
+	if err != nil {
+		return nil, fmt.Errorf("couldn't get releases: %w", err)
+	}
 
-		if shouldUpdate(latestVersion, comparedVersion) {
+	var updateAvailable bool
+	for _, newVersion := range releases {
+		if shouldUpdate(latestVersion, newVersion) {
 			updateAvailable = true
-			latestVersion = comparedVersion
+			latestVersion = newVersion
 		}
 	}
 
@@ -55,56 +52,65 @@ func Check(releasesGetterFn ReleasesGetter, currentRelease string) (*semver.Vers
 		return nil, nil
 	}
 
-	return latestVersion.version, nil
+	return latestVersion.Version, nil
 }
 
-func shouldUpdate(latestVersion *cachedVersion, comparedVersion *cachedVersion) bool {
-	if latestVersion.isStable && !comparedVersion.isStable {
+func shouldUpdate(latestVersion *Version, newVersion *Version) bool {
+	if newVersion.IsDraft {
 		return false
 	}
 
-	if latestVersion.isDevelopmentVersion && nonDevelopmentVersionAvailable(latestVersion, comparedVersion) {
+	if latestVersion.IsReleased && !newVersion.IsReleased {
+		return false
+	}
+
+	if latestVersion.IsDevelopment && nonDevelopmentVersionAvailable(latestVersion, newVersion) {
 		return true
 	}
 
-	return comparedVersion.version.GT(*latestVersion.version)
+	return newVersion.Version.GT(*latestVersion.Version)
 }
 
 // nonDevelopmentVersionAvailable verifies if the compared version is the
 // non-development equivalent of the latest version.
 // For example, 0.9.0-pre1 is the non-development version of 0.9.0-pre1+dev.
 // In semantic versioning, we don't compare the `build` annotation, so verifying
-// equality is safe.
-func nonDevelopmentVersionAvailable(latestVersion *cachedVersion, comparedVersion *cachedVersion) bool {
-	return comparedVersion.version.EQ(*latestVersion.version)
+// equality between 0.9.0-pre1 and 0.9.0-pre1+dev results in comparing:
+//     0.9.0-pre1 <> 0.9.0-pre1
+// So if it's equal, it means we have a
+func nonDevelopmentVersionAvailable(latestVersion *Version, comparedVersion *Version) bool {
+	return comparedVersion.Version.EQ(*latestVersion.Version)
 }
 
-func extractVersionFromRelease(release string) (*cachedVersion, error) {
-	version, err := semver.New(strings.TrimPrefix(release, "v"))
-	return asCachedVersion(version), err
-}
+// NewVersionFromString creates a Version and set the appropriate flags on it
+// based on the segments that compose the version.
+func NewVersionFromString(release string) (*Version, error) {
+	v, err := semver.New(strings.TrimPrefix(release, "v"))
+	if err != nil {
+		return nil, err
+	}
 
-type cachedVersion struct {
-	// version is the original version
-	version *semver.Version
-	// isDevelopmentVersion tells if the version has a `dev` build annotation.
-	isDevelopmentVersion bool
-	// isStable tells if the version has any pre-release annotations.
-	isStable bool
-}
-
-func asCachedVersion(v *semver.Version) *cachedVersion {
-	lv := &cachedVersion{
-		version: v,
+	version := &Version{
+		Version: v,
 	}
 
 	for _, build := range v.Build {
 		if build == "dev" {
-			lv.isDevelopmentVersion = true
+			version.IsDevelopment = true
 		}
 	}
 
-	lv.isStable = !lv.isDevelopmentVersion && len(v.Pre) == 0
+	version.IsPreReleased = len(v.Pre) != 0
 
-	return lv
+	version.IsReleased = !version.IsDevelopment && !version.IsPreReleased && !version.IsDraft
+
+	return version, nil
+}
+
+type Version struct {
+	Version       *semver.Version
+	IsDraft       bool
+	IsDevelopment bool
+	IsPreReleased bool
+	IsReleased    bool
 }

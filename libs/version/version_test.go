@@ -92,8 +92,16 @@ func testCheckingCurrentVersionSucceeds(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(tt *testing.T) {
 			// given
-			releasesGetter := func() ([]string, error) {
-				return tc.releases, nil
+			releasesGetter := func() ([]*version.Version, error) {
+				versions := make([]*version.Version, 0, len(tc.releases))
+				for _, release := range tc.releases {
+					fromString, err := version.NewVersionFromString(release)
+					if err != nil {
+						tt.Fatalf("couldn't format version \"%s\" for test", release)
+					}
+					versions = append(versions, fromString)
+				}
+				return versions, nil
 			}
 
 			// when
@@ -117,9 +125,9 @@ func testVerifyingUnreleasedVersionSucceeds(t *testing.T) {
 			version:      "0.1.0",
 			isUnreleased: false,
 		}, {
-			name:         "pre-release version is not unreleased",
+			name:         "pre-release version is unreleased",
 			version:      "0.1.0-pre",
-			isUnreleased: false,
+			isUnreleased: true,
 		}, {
 			name:         "development build on stable version is unreleased",
 			version:      "0.1.0+dev",
@@ -129,9 +137,9 @@ func testVerifyingUnreleasedVersionSucceeds(t *testing.T) {
 			version:      "0.1.0-alpha+dev",
 			isUnreleased: true,
 		}, {
-			name:         "annotated build on pre-release version is released",
+			name:         "annotated build on pre-release version is unreleased",
 			version:      "0.1.0-alpha+12345",
-			isUnreleased: false,
+			isUnreleased: true,
 		}, {
 			name:         "non-semver version is unreleased",
 			version:      "test",
