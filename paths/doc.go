@@ -21,19 +21,20 @@ func List(vegaPaths Paths) *ListPathsResponse {
 			"DataNodeCacheHome": vegaPaths.CachePathFor(DataNodeCacheHome),
 		},
 		ConfigPaths: map[string]string{
-			"DataNodeConfigHome":              vegaPaths.ConfigPathFor(DataNodeConfigHome),
-			"DataNodeDefaultConfigFile":       vegaPaths.ConfigPathFor(DataNodeDefaultConfigFile),
-			"FaucetConfigHome":                vegaPaths.ConfigPathFor(FaucetConfigHome),
-			"FaucetDefaultConfigFile":         vegaPaths.ConfigPathFor(FaucetDefaultConfigFile),
-			"NodeConfigHome":                  vegaPaths.ConfigPathFor(NodeConfigHome),
-			"NodeDefaultConfigFile":           vegaPaths.ConfigPathFor(NodeDefaultConfigFile),
-			"NodeWalletsConfigFile":           vegaPaths.ConfigPathFor(NodeWalletsConfigFile),
-			"WalletCLIConfigHome":             vegaPaths.ConfigPathFor(WalletCLIConfigHome),
-			"WalletCLIDefaultConfigFile":      vegaPaths.ConfigPathFor(WalletCLIDefaultConfigFile),
-			"WalletAppConfigHome":             vegaPaths.ConfigPathFor(WalletAppConfigHome),
-			"WalletAppDefaultConfigFile":      vegaPaths.ConfigPathFor(WalletAppDefaultConfigFile),
-			"WalletServiceConfigHome":         vegaPaths.ConfigPathFor(WalletServiceConfigHome),
-			"WalletServiceNetworksConfigHome": vegaPaths.ConfigPathFor(WalletServiceNetworksConfigHome),
+			"DataNodeConfigHome":                 vegaPaths.ConfigPathFor(DataNodeConfigHome),
+			"DataNodeDefaultConfigFile":          vegaPaths.ConfigPathFor(DataNodeDefaultConfigFile),
+			"FaucetConfigHome":                   vegaPaths.ConfigPathFor(FaucetConfigHome),
+			"FaucetDefaultConfigFile":            vegaPaths.ConfigPathFor(FaucetDefaultConfigFile),
+			"NodeConfigHome":                     vegaPaths.ConfigPathFor(NodeConfigHome),
+			"NodeDefaultConfigFile":              vegaPaths.ConfigPathFor(NodeDefaultConfigFile),
+			"NodeWalletsConfigFile":              vegaPaths.ConfigPathFor(NodeWalletsConfigFile),
+			"WalletCLIConfigHome":                vegaPaths.ConfigPathFor(WalletCLIConfigHome),
+			"WalletCLIDefaultConfigFile":         vegaPaths.ConfigPathFor(WalletCLIDefaultConfigFile),
+			"WalletAppConfigHome":                vegaPaths.ConfigPathFor(WalletAppConfigHome),
+			"WalletAppDefaultConfigFile":         vegaPaths.ConfigPathFor(WalletAppDefaultConfigFile),
+			"WalletServiceConfigHome":            vegaPaths.ConfigPathFor(WalletServiceConfigHome),
+			"WalletServiceNetworksConfigHome":    vegaPaths.ConfigPathFor(WalletServiceNetworksConfigHome),
+			"WalletServicePermissionsConfigFile": vegaPaths.ConfigPathFor(WalletServicePermissionsConfigFile),
 		},
 		DataPaths: map[string]string{
 			"NodeDataHome":                       vegaPaths.DataPathFor(NodeDataHome),
@@ -83,6 +84,7 @@ func Explain(name string) (string, error) {
 		"WalletAppDefaultConfigFile":         `This file contains the configuration used by the wallet-app.`,
 		"WalletServiceConfigHome":            `This folder contains the configuration files used by the wallet's service.`,
 		"WalletServiceNetworksConfigHome":    `This folder contains the network configuration files used by the wallet's service.`,
+		"WalletServicePermissionsConfigFile": `This file contains the permissions that control the access to the wallets.`,
 		"NodeDataHome":                       `This folder contains the data managed by the node.`,
 		"NodeWalletsDataHome":                `This folder contains the data managed by the node's wallets.`,
 		"VegaNodeWalletsDataHome":            `This folder contains the Vega wallet registered as node's wallet, used by the node to sign Vega commands.`,
@@ -112,7 +114,7 @@ func Explain(name string) (string, error) {
 
 	description, ok := paths[name]
 	if !ok {
-		return "", fmt.Errorf("path \"%s\" doesn't exist", name)
+		return "", fmt.Errorf("path \"%s\" has no documentation", name)
 	}
 
 	return description, nil

@@ -53,7 +53,8 @@ var (
 // 	├── wallet-app/
 // 	│	└── config.toml
 // 	└── wallet-service/
-// 		└── networks/
+// 		├── networks/
+//		└── permissions.toml
 
 type ConfigPath string
 
@@ -125,6 +126,10 @@ var (
 	// WalletServiceNetworksConfigHome is the folder containing the
 	// configuration files used by the networks.
 	WalletServiceNetworksConfigHome = JoinConfigPath(WalletServiceConfigHome, "networks")
+
+	// WalletServicePermissionsConfigFile is the file containing the permissions that
+	// control the access to the wallets.
+	WalletServicePermissionsConfigFile = ConfigPath(filepath.Join(WalletServiceConfigHome.String(), "permissions.toml"))
 )
 
 // File structure for data
@@ -133,12 +138,12 @@ var (
 // 	├── node/
 // 	│	└── wallets/
 // 	│		├── vega/
-// 	│		│	└── vega.timestamp
+// 	│		│	└── vega.<timestamp>
 // 	│		└── ethereum/
 // 	│			└── eth-node-wallet
 // 	├── faucet/
 // 	│	└── wallets/
-// 	│		└── vega.timestamp
+// 	│		└── vega.<timestamp>
 // 	├── wallets/
 // 	│	├── vega-wallet-1
 // 	│	└── vega-wallet-2
