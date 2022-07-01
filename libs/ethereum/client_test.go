@@ -3,8 +3,8 @@ package ethereum_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/big"
+	"os"
 	"testing"
 
 	vgethereum "code.vegaprotocol.io/shared/libs/ethereum"
@@ -20,7 +20,6 @@ var (
 	contractOwnerAddress = common.HexToAddress("0xEe7D375bcB50C26d52E1A4a472D8822A2A22d94F")
 
 	vegaPubKey              = "vega_1"
-	amountStr               = "100000000000000000000"
 	contractOwnerPrivateKey = "a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0"
 )
 
@@ -95,53 +94,54 @@ func approveAndStakeToken(token token, bridge *vgethereum.ClientStakingBridgeSes
 }
 
 func TestClient(t *testing.T) {
-	amount := new(big.Int)
-	amount, ok := amount.SetString(amountStr, 10)
-	if !ok {
-		log.Fatalf("can not parse %s into big string", amountStr)
+	ethereumAddress := os.Getenv("ETHEREUM_CLIENT_ADDRESS")
+	if ethereumAddress == "" {
+		t.Skip("skipping Ethereum client test, set environment variable ETHEREUM_CLIENT_ADDRESS to run it")
 	}
+
+	amount := big.NewInt(1000000000000000000)
 
 	ctx := context.Background()
 
-	client, err := vgethereum.NewClient(ctx, "ws://127.0.0.1:8545", 1440)
+	client, err := vgethereum.NewClient(ctx, ethereumAddress, 1440)
 	if err != nil {
-		log.Fatalf("Failed to create Ethereum client: %s", err)
+		t.Fatalf("Failed to create Ethereum client: %s", err)
 	}
 
 	stakingBridge, err := client.NewStakingBridgeSession(ctx, contractOwnerPrivateKey, stakingBridgeAddress, nil)
 	if err != nil {
-		log.Fatalf("Failed to create staking bridge: %s", err)
+		t.Fatalf("Failed to create staking bridge: %s", err)
 	}
 
 	erc20bridge, err := client.NewERC20BridgeSession(ctx, contractOwnerPrivateKey, erc20BridgeAddress, nil)
 	if err != nil {
-		log.Fatalf("Failed to create staking bridge: %s", err)
+		t.Fatalf("Failed to create staking bridge: %s", err)
 	}
 
 	tUSDCToken, err := client.NewBaseTokenSession(ctx, contractOwnerPrivateKey, tUSDCTokenAddress, nil)
 	if err != nil {
-		log.Fatalf("Failed to create tUSDC token: %s", err)
+		t.Fatalf("Failed to create tUSDC token: %s", err)
 	}
 
 	vegaToken, err := client.NewBaseTokenSession(ctx, contractOwnerPrivateKey, vegaTokenAddress, nil)
 	if err != nil {
-		log.Fatalf("Failed to create vega token: %s", err)
+		t.Fatalf("Failed to create vega token: %s", err)
 	}
 
 	if err := mintTokenAndShowBalances(client, tUSDCToken, contractOwnerAddress, amount); err != nil {
-		log.Fatalf("Failed to mint and show balances for tUSDCToken: %s", err)
+		t.Fatalf("Failed to mint and show balances for tUSDCToken: %s", err)
 	}
 
 	if err := mintTokenAndShowBalances(client, vegaToken, contractOwnerAddress, amount); err != nil {
-		log.Fatalf("Failed to mint and show balances for vegaToken: %s", err)
+		t.Fatalf("Failed to mint and show balances for vegaToken: %s", err)
 	}
 
 	if err := approveAndDepositToken(tUSDCToken, erc20bridge, amount, vegaPubKey); err != nil {
-		log.Fatalf("Failed to approve and deposit token on erc20 bridge: %s", err)
+		t.Fatalf("Failed to approve and deposit token on erc20 bridge: %s", err)
 	}
 
 	if err := approveAndStakeToken(vegaToken, stakingBridge, amount, vegaPubKey); err != nil {
-		log.Fatalf("Failed to approve and stake token on staking bridge: %s", err)
+		t.Fatalf("Failed to approve and stake token on staking bridge: %s", err)
 	}
 
 	fmt.Println("Done")
