@@ -8,20 +8,22 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	"code.vegaprotocol.io/shared/libs/ethereum/generated"
 )
 
-type ClientBaseTokenSession struct {
-	BaseTokenSession
+type BaseTokenSession struct {
+	generated.BaseTokenSession
 	syncTimeout time.Duration
 	address     common.Address
 }
 
-func (ts ClientBaseTokenSession) Address() common.Address {
+func (ts BaseTokenSession) Address() common.Address {
 	return ts.address
 }
 
-func (ts ClientBaseTokenSession) ApproveSync(spender common.Address, value *big.Int) (*types.Transaction, error) {
-	sink := make(chan *BaseTokenApproval)
+func (ts BaseTokenSession) ApproveSync(spender common.Address, value *big.Int) (*types.Transaction, error) {
+	sink := make(chan *generated.BaseTokenApproval)
 
 	sub, err := ts.Contract.WatchApproval(&bind.WatchOpts{}, sink, []common.Address{ts.CallOpts.From}, []common.Address{spender})
 	if err != nil {
@@ -37,8 +39,8 @@ func (ts ClientBaseTokenSession) ApproveSync(spender common.Address, value *big.
 	return wait(sink, sub, tx, ts.syncTimeout)
 }
 
-func (ts ClientBaseTokenSession) TransferSync(recipient common.Address, value *big.Int) (*types.Transaction, error) {
-	sink := make(chan *BaseTokenTransfer)
+func (ts BaseTokenSession) TransferSync(recipient common.Address, value *big.Int) (*types.Transaction, error) {
+	sink := make(chan *generated.BaseTokenTransfer)
 
 	sub, err := ts.Contract.WatchTransfer(&bind.WatchOpts{}, sink, []common.Address{ts.CallOpts.From}, []common.Address{recipient})
 	if err != nil {
@@ -54,8 +56,8 @@ func (ts ClientBaseTokenSession) TransferSync(recipient common.Address, value *b
 	return wait(sink, sub, tx, ts.syncTimeout)
 }
 
-func (ts ClientBaseTokenSession) TransferFromSync(sender common.Address, recipient common.Address, value *big.Int) (*types.Transaction, error) {
-	sink := make(chan *BaseTokenTransfer)
+func (ts BaseTokenSession) TransferFromSync(sender common.Address, recipient common.Address, value *big.Int) (*types.Transaction, error) {
+	sink := make(chan *generated.BaseTokenTransfer)
 
 	sub, err := ts.Contract.WatchTransfer(&bind.WatchOpts{}, sink, []common.Address{sender}, []common.Address{recipient})
 	if err != nil {
@@ -71,7 +73,7 @@ func (ts ClientBaseTokenSession) TransferFromSync(sender common.Address, recipie
 	return wait(sink, sub, tx, ts.syncTimeout)
 }
 
-func (ts ClientBaseTokenSession) MintSync(to common.Address, amount *big.Int) (*types.Transaction, error) {
+func (ts BaseTokenSession) MintSync(to common.Address, amount *big.Int) (*types.Transaction, error) {
 	origBalance, err := ts.BalanceOf(to)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get balance for %s: %s", to, err)

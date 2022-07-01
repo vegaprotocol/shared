@@ -57,7 +57,7 @@ func mintTokenAndShowBalances(client *vgethereum.Client, token token, address co
 	return nil
 }
 
-func approveAndDepositToken(token token, bridge *vgethereum.ClientERC20BridgeSession, amount *big.Int, vegaPubKey string) error {
+func approveAndDepositToken(token token, bridge *vgethereum.ERC20BridgeSession, amount *big.Int, vegaPubKey string) error {
 	fmt.Println("---- Deposit token")
 
 	fmt.Printf("Approving token %s amount %s for %s \n", token.Address(), amount, bridge.Address())
@@ -75,7 +75,7 @@ func approveAndDepositToken(token token, bridge *vgethereum.ClientERC20BridgeSes
 	return nil
 }
 
-func approveAndStakeToken(token token, bridge *vgethereum.ClientStakingBridgeSession, amount *big.Int, vegaPubKey string) error {
+func approveAndStakeToken(token token, bridge *vgethereum.StakingBridgeSession, amount *big.Int, vegaPubKey string) error {
 	fmt.Println("---- Stake token")
 
 	fmt.Printf("Approving token %s amount %s for %s \n", token.Address(), amount, bridge.Address())

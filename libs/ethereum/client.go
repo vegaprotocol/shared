@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	"code.vegaprotocol.io/shared/libs/ethereum/generated"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -46,7 +47,7 @@ func (ec *Client) NewERC20BridgeSession(
 	contractOwnerPrivateKey string,
 	bridgeAddress common.Address,
 	syncTimeout *time.Duration,
-) (*ClientERC20BridgeSession, error) {
+) (*ERC20BridgeSession, error) {
 	privateKey, err := crypto.HexToECDSA(contractOwnerPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert erc20 bridge contract owner private key hash into ECDSA: %w", err)
@@ -57,7 +58,7 @@ func (ec *Client) NewERC20BridgeSession(
 		return nil, fmt.Errorf("failed to create erc20 bridge contract authentication: %w", err)
 	}
 
-	bridge, err := NewERC20Bridge(bridgeAddress, ec.Client)
+	bridge, err := generated.NewERC20Bridge(bridgeAddress, ec.Client)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating erc20 bridge contract for address %q: %w", bridgeAddress, err)
 	}
@@ -66,8 +67,8 @@ func (ec *Client) NewERC20BridgeSession(
 		syncTimeout = &defaultSyncDuration
 	}
 
-	return &ClientERC20BridgeSession{
-		ERC20BridgeSession: ERC20BridgeSession{
+	return &ERC20BridgeSession{
+		ERC20BridgeSession: generated.ERC20BridgeSession{
 			Contract: bridge,
 			CallOpts: bind.CallOpts{
 				From:    auth.From,
@@ -85,7 +86,7 @@ func (ec *Client) NewStakingBridgeSession(
 	contractOwnerPrivateKey string,
 	bridgeAddress common.Address,
 	syncTimeout *time.Duration,
-) (*ClientStakingBridgeSession, error) {
+) (*StakingBridgeSession, error) {
 	privateKey, err := crypto.HexToECDSA(contractOwnerPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert staking bridge contract owner private key hash into ECDSA: %w", err)
@@ -96,7 +97,7 @@ func (ec *Client) NewStakingBridgeSession(
 		return nil, fmt.Errorf("failed to create staking bridge contract authentication: %w", err)
 	}
 
-	bridge, err := NewStakingBridge(bridgeAddress, ec.Client)
+	bridge, err := generated.NewStakingBridge(bridgeAddress, ec.Client)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating staking bridge contract for address %q: %w", bridgeAddress, err)
 	}
@@ -105,8 +106,8 @@ func (ec *Client) NewStakingBridgeSession(
 		syncTimeout = &defaultSyncDuration
 	}
 
-	return &ClientStakingBridgeSession{
-		StakingBridgeSession: StakingBridgeSession{
+	return &StakingBridgeSession{
+		StakingBridgeSession: generated.StakingBridgeSession{
 			Contract: bridge,
 			CallOpts: bind.CallOpts{
 				From:    auth.From,
@@ -124,7 +125,7 @@ func (ec *Client) NewBaseTokenSession(
 	contractOwnerPrivateKey string,
 	tokenAddress common.Address,
 	syncTimeout *time.Duration,
-) (*ClientBaseTokenSession, error) {
+) (*BaseTokenSession, error) {
 	privateKey, err := crypto.HexToECDSA(contractOwnerPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert base token contract owner private key hash into ECDSA: %w", err)
@@ -135,7 +136,7 @@ func (ec *Client) NewBaseTokenSession(
 		return nil, fmt.Errorf("failed to create base token contract authentication: %w", err)
 	}
 
-	token, err := NewBaseToken(tokenAddress, ec.Client)
+	token, err := generated.NewBaseToken(tokenAddress, ec.Client)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating base token contract for address %q: %w", tokenAddress, err)
 	}
@@ -144,8 +145,8 @@ func (ec *Client) NewBaseTokenSession(
 		syncTimeout = &defaultSyncDuration
 	}
 
-	return &ClientBaseTokenSession{
-		BaseTokenSession: BaseTokenSession{
+	return &BaseTokenSession{
+		BaseTokenSession: generated.BaseTokenSession{
 			Contract: token,
 			CallOpts: bind.CallOpts{
 				From:    auth.From,
