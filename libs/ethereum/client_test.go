@@ -19,7 +19,7 @@ var (
 	vegaTokenAddress     = common.HexToAddress("0x67175Da1D5e966e40D11c4B2519392B2058373de")
 	contractOwnerAddress = common.HexToAddress("0xEe7D375bcB50C26d52E1A4a472D8822A2A22d94F")
 
-	vegaPubKey              = "vega_1"
+	vegaPubKey              = "321b470cddc840854fb33b34674683cae3201c7b3eceffa927f663549f17484f"
 	contractOwnerPrivateKey = "a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0"
 )
 
@@ -66,7 +66,13 @@ func approveAndDepositToken(token token, bridge *vgethereum.ERC20BridgeSession, 
 	}
 
 	fmt.Printf("Depositing asset %s amout %s Vega pub key %s \n", token.Address(), amount, bridge.Address())
-	if _, err := bridge.DepositAssetSync(token.Address(), amount, vgethereum.StringToByte32Array(vegaPubKey)); err != nil {
+
+	vegaPubKeyByte32, err := vgethereum.HexStringToByte32Array(vegaPubKey)
+	if err != nil {
+		return err
+	}
+
+	if _, err := bridge.DepositAssetSync(token.Address(), amount, vegaPubKeyByte32); err != nil {
 		return fmt.Errorf("failed to deposit asset: %w", err)
 	}
 
@@ -83,8 +89,13 @@ func approveAndStakeToken(token token, bridge *vgethereum.StakingBridgeSession, 
 		return fmt.Errorf("failed to approve token: %w", err)
 	}
 
+	vegaPubKeyByte32, err := vgethereum.HexStringToByte32Array(vegaPubKey)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Staking asset %s amout %s Vega pub key %s \n", token.Address(), amount, bridge.Address())
-	if _, err := bridge.Stake(amount, vgethereum.StringToByte32Array(vegaPubKey)); err != nil {
+	if _, err := bridge.Stake(amount, vegaPubKeyByte32); err != nil {
 		return fmt.Errorf("failed to stake asset: %w", err)
 	}
 

@@ -2,6 +2,7 @@ package ethereum
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -170,9 +171,15 @@ func wait[T any](sink chan T, sub event.Subscription, tx *types.Transaction, tim
 	}
 }
 
-func StringToByte32Array(str string) [32]byte {
+func HexStringToByte32Array(str string) ([32]byte, error) {
 	value := [32]byte{}
-	copy(value[:], []byte(str))
 
-	return value
+	decoded, err := hex.DecodeString(str)
+	if err != nil {
+		return value, err
+	}
+
+	copy(value[:], decoded)
+
+	return value, nil
 }
