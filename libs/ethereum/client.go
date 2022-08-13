@@ -8,13 +8,14 @@ import (
 	"net/url"
 	"time"
 
-	"code.vegaprotocol.io/shared/libs/ethereum/generated"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
+
+	"code.vegaprotocol.io/shared/libs/ethereum/generated"
 )
 
 var defaultSyncDuration = time.Second * 5
@@ -24,21 +25,28 @@ type Client struct {
 	chainID *big.Int
 }
 
-func NewClient(ctx context.Context, ethereumAddress string, chainID int64) (*Client, error) {
+func NewClient(ctx context.Context, ethereumAddress string) (*Client, error) {
 	addr, err := url.Parse(ethereumAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Ethereum address: %w", err)
 	}
 
-	addr.Scheme = "ws"
+	if addr.Scheme != "ws" && addr.Scheme != "wss" {
+		return nil, fmt.Errorf("address scheme needs to be 'ws' or 'wss': %q", addr.Scheme)
+	}
 
 	client, err := ethclient.DialContext(ctx, addr.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial Ethereum client: %s", err)
 	}
 
+	chainID, err := client.ChainID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %w", err)
+	}
+
 	return &Client{
-		chainID: big.NewInt(chainID),
+		chainID: chainID,
 		Client:  client,
 	}, nil
 }
@@ -157,6 +165,8 @@ func (ec *Client) NewBaseTokenSession(
 		},
 		syncTimeout: *syncTimeout,
 		address:     tokenAddress,
+		privateKey:  privateKey,
+		client:      ec,
 	}, nil
 }
 

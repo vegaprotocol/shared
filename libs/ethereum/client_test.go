@@ -7,9 +7,10 @@ import (
 	"os"
 	"testing"
 
-	vgethereum "code.vegaprotocol.io/shared/libs/ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
+	vgethereum "code.vegaprotocol.io/shared/libs/ethereum"
 )
 
 var (
@@ -31,7 +32,7 @@ type token interface {
 	Address() common.Address
 }
 
-func mintTokenAndShowBalances(client *vgethereum.Client, token token, address common.Address, amount *big.Int) error {
+func mintTokenAndShowBalances(token token, address common.Address, amount *big.Int) error {
 	fmt.Println("---- Minting new token")
 
 	balance, err := token.BalanceOf(address)
@@ -114,7 +115,7 @@ func TestClient(t *testing.T) {
 
 	ctx := context.Background()
 
-	client, err := vgethereum.NewClient(ctx, ethereumAddress, 1440)
+	client, err := vgethereum.NewClient(ctx, ethereumAddress)
 	if err != nil {
 		t.Fatalf("Failed to create Ethereum client: %s", err)
 	}
@@ -139,11 +140,11 @@ func TestClient(t *testing.T) {
 		t.Fatalf("Failed to create vega token: %s", err)
 	}
 
-	if err := mintTokenAndShowBalances(client, tUSDCToken, contractOwnerAddress, amount); err != nil {
+	if err := mintTokenAndShowBalances(tUSDCToken, contractOwnerAddress, amount); err != nil {
 		t.Fatalf("Failed to mint and show balances for tUSDCToken: %s", err)
 	}
 
-	if err := mintTokenAndShowBalances(client, vegaToken, contractOwnerAddress, amount); err != nil {
+	if err := mintTokenAndShowBalances(vegaToken, contractOwnerAddress, amount); err != nil {
 		t.Fatalf("Failed to mint and show balances for vegaToken: %s", err)
 	}
 
