@@ -79,15 +79,6 @@ func (ts *BaseTokenSession) TransferFromSync(sender common.Address, recipient co
 }
 
 func (ts *BaseTokenSession) MintSync(to common.Address, amount *big.Int) (*types.Transaction, error) {
-	isOwner, err := ts.IsOwner()
-	if err != nil {
-		return nil, fmt.Errorf("failed to check if owner: %w", err)
-	}
-
-	if !isOwner {
-		return nil, fmt.Errorf("only owner can mint")
-	}
-
 	sink := make(chan *generated.BaseTokenTransfer)
 
 	sub, err := ts.Contract.WatchTransfer(&bind.WatchOpts{}, sink, []common.Address{common.BigToAddress(common.Big0)}, []common.Address{to})
