@@ -18,14 +18,13 @@ import (
 
 type Service struct {
 	client               *vgethereum.Client
-	vegaPubKey           string
 	erc20BridgeAddress   common.Address
 	stakingBridgeAddress common.Address
 	syncTimeout          *time.Duration
 	log                  *log.Entry
 }
 
-func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
+func NewService(conf *config.TokenConfig) (*Service, error) {
 	ctx := context.Background()
 
 	var syncTimeout *time.Duration
@@ -41,7 +40,6 @@ func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
 
 	return &Service{
 		client:               client,
-		vegaPubKey:           vegaPubKey,
 		erc20BridgeAddress:   common.HexToAddress(conf.Erc20BridgeAddress),
 		stakingBridgeAddress: common.HexToAddress(conf.StakingBridgeAddress),
 		syncTimeout:          syncTimeout,
@@ -49,11 +47,7 @@ func NewService(conf *config.TokenConfig, vegaPubKey string) (*Service, error) {
 	}, nil
 }
 
-func (s *Service) Stake(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress string, amount *num.Uint) (*num.Uint, error) {
-	return s.StakeToAddress(ctx, ownerPrivateKey, ownerAddress, vegaTokenAddress, s.vegaPubKey, amount)
-}
-
-func (s *Service) StakeToAddress(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress, vegaPubKey string, amount *num.Uint) (*num.Uint, error) {
+func (s *Service) Stake(ctx context.Context, ownerPrivateKey, ownerAddress, vegaTokenAddress, vegaPubKey string, amount *num.Uint) (*num.Uint, error) {
 	stakingBridge, err := s.client.NewStakingBridgeSession(ctx, ownerPrivateKey, s.stakingBridgeAddress, s.syncTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create staking bridge: %w", err)
@@ -83,7 +77,7 @@ func (s *Service) StakeToAddress(ctx context.Context, ownerPrivateKey, ownerAddr
 	return staked, nil
 }
 
-func (s *Service) Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, erc20TokenAddress string, amount *num.Uint) (*num.Uint, error) {
+func (s *Service) Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, erc20TokenAddress, vegaPubKey string, amount *num.Uint) (*num.Uint, error) {
 	erc20Token, err := s.client.NewBaseTokenSession(ctx, ownerPrivateKey, common.HexToAddress(erc20TokenAddress), s.syncTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ERC20 token: %w", err)
@@ -99,11 +93,14 @@ func (s *Service) Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, er
 		return nil, fmt.Errorf("failed to mint erc20Token token: %w", err)
 	}
 
-	if err = s.approveAndDepositToken(erc20Token, erc20bridge, minted); err != nil {
+	if err = s.approveAndDepositToken(erc20Token, vegaPubKey, erc20bridge, minted); err != nil {
 		return nil, fmt.Errorf("failed to approve and deposit token on erc20 bridge: %w", err)
 	}
 
-	s.log.Debug("Deposit request sent")
+	s.log.WithFields(log.Fields{
+		"amount": amount.String(),
+		"pubkey": vegaPubKey,
+	}).Debug("Deposit request sent")
 
 	deposited, overflow := num.UintFromBig(minted)
 	if overflow {
@@ -177,7 +174,7 @@ func (s *Service) mintToken(ctx context.Context, token token, address common.Add
 	return minted, nil
 }
 
-func (s *Service) approveAndDepositToken(token token, bridge *vgethereum.ERC20BridgeSession, amount *big.Int) error {
+func (s *Service) approveAndDepositToken(token token, vegaPubKey string, bridge *vgethereum.ERC20BridgeSession, amount *big.Int) error {
 	name, err := token.Name()
 	if err != nil {
 		return fmt.Errorf("failed to get name of token: %w", err)
@@ -187,6 +184,7 @@ func (s *Service) approveAndDepositToken(token token, bridge *vgethereum.ERC20Br
 		log.Fields{
 			"token":   name,
 			"amount":  amount,
+			"pubkey":  vegaPubKey,
 			"address": bridge.Address(),
 		}).Debug("Approving token")
 
@@ -198,10 +196,11 @@ func (s *Service) approveAndDepositToken(token token, bridge *vgethereum.ERC20Br
 		log.Fields{
 			"token":   name,
 			"amount":  amount,
+			"pubkey":  vegaPubKey,
 			"address": bridge.Address(),
 		}).Debug("Depositing asset")
 
-	vegaPubKeyByte32, err := vgethereum.HexStringToByte32Array(s.vegaPubKey)
+	vegaPubKeyByte32, err := vgethereum.HexStringToByte32Array(vegaPubKey)
 	if err != nil {
 		return err
 	}
@@ -214,6 +213,7 @@ func (s *Service) approveAndDepositToken(token token, bridge *vgethereum.ERC20Br
 		log.Fields{
 			"token":   name,
 			"amount":  amount,
+			"pubkey":  vegaPubKey,
 			"address": bridge.Address(),
 		}).Debug("Token deposited")
 

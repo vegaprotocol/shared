@@ -12,7 +12,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	e "code.vegaprotocol.io/shared/libs/errors"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v1"
+	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
+	"code.vegaprotocol.io/vega/protos/vega"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
@@ -162,7 +163,7 @@ func (n *DataNode) ObserveEventBus(ctx context.Context) (vegaapipb.CoreService_O
 // === TradingDataService ===
 
 // PartyAccounts returns accounts for the given party.
-func (n *DataNode) PartyAccounts(ctx context.Context, req *dataapipb.PartyAccountsRequest) (*dataapipb.PartyAccountsResponse, error) {
+func (n *DataNode) PartyAccounts(ctx context.Context, req *dataapipb.ListAccountsRequest) ([]*dataapipb.AccountBalance, error) {
 	msg := "gRPC call failed (data-node): PartyAccounts: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -176,15 +177,20 @@ func (n *DataNode) PartyAccounts(ctx context.Context, req *dataapipb.PartyAccoun
 	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
-	response, err := c.PartyAccounts(ctx, req)
+	response, err := c.ListAccounts(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	return response, nil
+	var accounts []*dataapipb.AccountBalance
+	for _, a := range response.Accounts.Edges {
+		accounts = append(accounts, a.Node)
+	}
+
+	return accounts, nil
 }
 
-func (n *DataNode) PartyStake(ctx context.Context, req *dataapipb.PartyStakeRequest) (*dataapipb.PartyStakeResponse, error) {
+func (n *DataNode) PartyStake(ctx context.Context, req *dataapipb.GetStakeRequest) (*dataapipb.GetStakeResponse, error) {
 	msg := "gRPC call failed (data-node): PartyStake: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -198,7 +204,7 @@ func (n *DataNode) PartyStake(ctx context.Context, req *dataapipb.PartyStakeRequ
 	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
-	response, err := c.PartyStake(ctx, req)
+	response, err := c.GetStake(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
@@ -207,7 +213,7 @@ func (n *DataNode) PartyStake(ctx context.Context, req *dataapipb.PartyStakeRequ
 }
 
 // MarketDataByID returns market data for the specified market.
-func (n *DataNode) MarketDataByID(ctx context.Context, req *dataapipb.MarketDataByIDRequest) (*dataapipb.MarketDataByIDResponse, error) {
+func (n *DataNode) MarketDataByID(ctx context.Context, req *dataapipb.GetLatestMarketDataRequest) (*vega.MarketData, error) {
 	msg := "gRPC call failed (data-node): MarketDataByID: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -221,16 +227,16 @@ func (n *DataNode) MarketDataByID(ctx context.Context, req *dataapipb.MarketData
 	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
-	response, err := c.MarketDataByID(ctx, req)
+	response, err := c.GetLatestMarketData(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	return response, nil
+	return response.GetMarketData(), nil
 }
 
 // Markets returns all markets.
-func (n *DataNode) Markets(ctx context.Context, req *dataapipb.MarketsRequest) (*dataapipb.MarketsResponse, error) {
+func (n *DataNode) Markets(ctx context.Context, req *dataapipb.ListMarketsRequest) ([]*vega.Market, error) {
 	msg := "gRPC call failed (data-node): Markets: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -244,16 +250,21 @@ func (n *DataNode) Markets(ctx context.Context, req *dataapipb.MarketsRequest) (
 	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
-	response, err := c.Markets(ctx, req)
+	response, err := c.ListMarkets(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	return response, nil
+	var markets []*vega.Market
+	for _, m := range response.Markets.Edges {
+		markets = append(markets, m.Node)
+	}
+
+	return markets, nil
 }
 
 // PositionsByParty returns positions for the given party.
-func (n *DataNode) PositionsByParty(ctx context.Context, req *dataapipb.PositionsByPartyRequest) (*dataapipb.PositionsByPartyResponse, error) {
+func (n *DataNode) PositionsByParty(ctx context.Context, req *dataapipb.ListPositionsRequest) ([]*vega.Position, error) {
 	msg := "gRPC call failed (data-node): PositionsByParty: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -267,16 +278,21 @@ func (n *DataNode) PositionsByParty(ctx context.Context, req *dataapipb.Position
 	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
-	response, err := c.PositionsByParty(ctx, req)
+	response, err := c.ListPositions(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	return response, nil
+	var positions []*vega.Position
+	for _, p := range response.Positions.Edges {
+		positions = append(positions, p.Node)
+	}
+
+	return positions, nil
 }
 
 // AssetByID returns the specified asset.
-func (n *DataNode) AssetByID(ctx context.Context, req *dataapipb.AssetByIDRequest) (*dataapipb.AssetByIDResponse, error) {
+func (n *DataNode) AssetByID(ctx context.Context, req *dataapipb.GetAssetRequest) (*vega.Asset, error) {
 	msg := "gRPC call failed (data-node): AssetByID: %w"
 	if n == nil {
 		return nil, fmt.Errorf(msg, e.ErrNil)
@@ -290,12 +306,12 @@ func (n *DataNode) AssetByID(ctx context.Context, req *dataapipb.AssetByIDReques
 	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
 
-	response, err := c.AssetByID(ctx, req)
+	response, err := c.GetAsset(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	return response, nil
+	return response.GetAsset(), nil
 }
 
 func (n *DataNode) WaitForStateChange(ctx context.Context, state connectivity.State) bool {
