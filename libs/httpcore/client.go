@@ -25,7 +25,10 @@ func DoHTTP(
 	cli *http.Client, url *url.URL, method string, body io.Reader,
 	headers []Header,
 ) ([]byte, error) {
-	req, _ := http.NewRequestWithContext(ctx, method, url.String(), body)
+	req, err := http.NewRequestWithContext(ctx, method, url.String(), body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
 	for _, hdr := range headers {
 		req.Header.Add(hdr.Key, hdr.Value)
 	}
