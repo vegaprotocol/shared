@@ -250,7 +250,7 @@ func (a *account) WaitForTopUpToFinalise(
 				a.setWaitingDeposit(assetID, expect)
 			}
 
-			if gotAmount.GTE(expect) {
+			if !gotAmount.IsZero() && gotAmount.GTE(expect) {
 				a.log.WithFields(log.Fields{
 					"name":    a.name,
 					"partyId": walletPubKey,
