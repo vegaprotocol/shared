@@ -37,7 +37,7 @@ func (a *Service) Init(pubKey string, pauseCh chan types.PauseSignal) {
 	a.accountStream.init(pubKey, pauseCh)
 }
 
-func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, from string) error {
+func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, scale uint64, from string) error {
 	store, err := a.getStore(ctx, assetID)
 	if err != nil {
 		return err
@@ -51,6 +51,8 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 		return nil
 	}
 
+	askAmount := num.Zero().Mul(targetAmount, num.NewUint(scale))
+
 	a.log.WithFields(
 		log.Fields{
 			"name":         a.name,
@@ -58,9 +60,10 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 			"asset":        assetID,
 			"balance":      balance.String(),
 			"targetAmount": targetAmount.String(),
+			"askAmount":    askAmount.String(),
 		}).Debugf("%s: Account balance is less than target amount, depositing...", from)
 
-	if err := a.coinProvider.TopUpAsync(ctx, a.name, a.pubKey, assetID, targetAmount); err != nil {
+	if err := a.coinProvider.TopUpAsync(ctx, a.name, a.pubKey, assetID, askAmount); err != nil {
 		return fmt.Errorf("failed to top up: %w", err)
 	}
 
@@ -68,7 +71,7 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 
 	a.log.WithFields(log.Fields{"name": a.name}).Debugf("%s: Waiting for top-up...", from)
 
-	if err = a.accountStream.WaitForTopUpToFinalise(ctx, a.pubKey, assetID, targetAmount, 0); err != nil {
+	if err = a.accountStream.WaitForTopUpToFinalise(ctx, a.pubKey, assetID, askAmount, 0); err != nil {
 		return fmt.Errorf("failed to finalise deposit: %w", err)
 	}
 

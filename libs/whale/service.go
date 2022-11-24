@@ -105,57 +105,36 @@ func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress,
 		return nil
 	}
 
-	go func() {
-		w.log.WithFields(
-			log.Fields{
-				"receiverName":   receiverName,
-				"receiverPubKey": receiverAddress,
-				"assetID":        assetID,
-				"amount":         amount.String(),
-			}).Debugf("Ensuring account has enough balance...")
+	if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, 100, "Whale"); err != nil {
+		return fmt.Errorf("failed to ensure enough funds: %w", err)
+	}
 
-		// TODO: retry
-		if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, "Whale"); err != nil {
-			w.log.Errorf("Whale: failed to ensure enough funds: %s", err)
-			return
-		}
-
-		w.log.WithFields(
-			log.Fields{
-				"receiverName":   receiverName,
-				"receiverPubKey": receiverAddress,
-				"assetID":        assetID,
-				"amount":         amount.String(),
-			}).Debugf("Whale balance ensured, sending funds...")
-
-		err := w.wallet.SignTx(ctx, &v1.SubmitTransactionRequest{
-			PubKey:    w.walletConfig.WalletPubKey,
-			Propagate: true,
-			Command: &v1.SubmitTransactionRequest_Transfer{
-				Transfer: &commV1.Transfer{
-					FromAccountType: vtypes.AccountTypeGeneral,
-					To:              receiverAddress,
-					ToAccountType:   vtypes.AccountTypeGeneral,
-					Asset:           assetID,
-					Amount:          amount.String(),
-					Reference:       fmt.Sprintf("Liquidity Bot '%s' Top-Up", receiverName),
-					Kind:            &commV1.Transfer_OneOff{OneOff: &commV1.OneOffTransfer{}},
-				},
+	err = w.wallet.SignTx(ctx, &v1.SubmitTransactionRequest{
+		PubKey:    w.walletConfig.WalletPubKey,
+		Propagate: true,
+		Command: &v1.SubmitTransactionRequest_Transfer{
+			Transfer: &commV1.Transfer{
+				FromAccountType: vtypes.AccountTypeGeneral,
+				To:              receiverAddress,
+				ToAccountType:   vtypes.AccountTypeGeneral,
+				Asset:           assetID,
+				Amount:          amount.String(),
+				Reference:       fmt.Sprintf("Liquidity Bot '%s' Top-Up", receiverName),
+				Kind:            &commV1.Transfer_OneOff{OneOff: &commV1.OneOffTransfer{}},
 			},
-		})
-		if err != nil {
-			w.log.Errorf("Failed to top-up bot '%s': %s", receiverName, err)
-			return
-		}
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to top-up bot '%s': %w", receiverName, err)
+	}
 
-		w.log.WithFields(
-			log.Fields{
-				"receiverName":   receiverName,
-				"receiverPubKey": receiverAddress,
-				"assetID":        assetID,
-				"amount":         amount.String(),
-			}).Debugf("Top-up sent")
-	}()
+	w.log.WithFields(
+		log.Fields{
+			"receiverName":   receiverName,
+			"receiverPubKey": receiverAddress,
+			"assetID":        assetID,
+			"amount":         amount.String(),
+		}).Debugf("Top-up sent")
 
 	return nil
 }

@@ -65,25 +65,10 @@ func (a *account) GetBalances(ctx context.Context, assetID string) (balanceStore
 		return nil, err
 	}
 
-	if len(accounts) == 0 {
-		a.log.WithFields(log.Fields{
-			"name":    a.name,
-			"partyId": a.walletPubKey,
-		}).Warningf("Party has no accounts for asset %s", assetID)
-	}
-
 	store := cache.NewBalanceStore()
 	a.balanceStores.set(assetID, store)
 
 	for _, acc := range accounts {
-		/*a.log.WithFields(log.Fields{
-			"name":        a.name,
-			"partyId":     a.walletPubKey,
-			"accountType": acc.Type.String(),
-			"balance":     acc.Balance,
-			"assetID":     acc.Asset,
-		}).Debug("Setting initial account balance")*/
-
 		if err = a.setBalanceByType(acc.Type, acc.Balance, store); err != nil {
 			a.log.WithFields(
 				log.Fields{
@@ -225,14 +210,6 @@ func (a *account) WaitForTopUpToFinalise(
 			if status != "" && !slices.Contains(okStatus, status) {
 				return true, fmt.Errorf("transfer %s failed: %s", event.Id, status)
 			}
-			/*
-				a.log.WithFields(log.Fields{
-					"account.name":  a.name,
-					"event.partyID": partyId,
-					"event.assetID": asset,
-					"event.balance": balance,
-					"event.status":  status,
-				}).Debugf("Received %s event", event.Type.String())*/
 
 			// only check the deposited amount for account events
 			if event.Type != eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT {
@@ -250,7 +227,7 @@ func (a *account) WaitForTopUpToFinalise(
 				a.setWaitingDeposit(assetID, expect)
 			}
 
-			if !gotAmount.IsZero() && gotAmount.GTE(expect) {
+			if gotAmount.GTE(expect) {
 				a.log.WithFields(log.Fields{
 					"name":    a.name,
 					"partyId": walletPubKey,
@@ -258,7 +235,7 @@ func (a *account) WaitForTopUpToFinalise(
 				}).Info("TopUp finalised")
 				a.deleteWaitingDeposit(assetID)
 				return true, nil
-			} else {
+			} else if !gotAmount.IsZero() {
 				a.log.WithFields(log.Fields{
 					"name":         a.name,
 					"partyId":      a.walletPubKey,

@@ -51,9 +51,6 @@ func (b *busEventProcessor) ProcessEvents(
 	var stop bool
 	go func() {
 		defer func() {
-			/*b.log.WithFields(log.Fields{
-				"name": name,
-			}).Debug("Stopping event processor")*/
 			close(errCh)
 		}()
 		for s := b.mustGetStream(ctx, name, req); !stop; {
