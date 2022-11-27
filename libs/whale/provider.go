@@ -12,6 +12,7 @@ import (
 	"github.com/slack-go/slack"
 
 	"code.vegaprotocol.io/shared/libs/num"
+	"code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/shared/libs/whale/config"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
@@ -27,7 +28,7 @@ type Provider struct {
 	pendingDeposits map[string]pendingDeposit
 	mu              sync.Mutex
 
-	ensureBalanceCh chan ensureBalanceRequest
+	topUpChan chan types.TopUpRequest
 
 	walletConfig *config.WhaleConfig
 	callTimeout  time.Duration
@@ -65,7 +66,7 @@ func NewProvider(
 		faucet:           faucet,
 		ownerPrivateKeys: config.OwnerPrivateKeys,
 		walletConfig:     config,
-		ensureBalanceCh:  make(chan ensureBalanceRequest),
+		topUpChan:        make(chan types.TopUpRequest),
 		callTimeout:      time.Duration(config.SyncTimeoutSec) * time.Second,
 		slack: slacker{
 			Client:    slack.New(config.SlackConfig.BotToken, slack.OptionAppLevelToken(config.SlackConfig.AppToken)),
@@ -79,28 +80,18 @@ func NewProvider(
 	}
 
 	go func() {
-		for req := range p.ensureBalanceCh {
-			if err := p.topUpAsync(req.ctx, req.name, req.address, req.assetID, req.amount); err != nil {
-				log.Errorf("Whale: failed to ensure enough funds: %s", err)
-			}
+		for req := range p.topUpChan {
+			req.ErrResp <- p.handleTopUp(req.Ctx, req.ReceiverName, req.ReceiverAddress, req.AssetID, req.Amount)
 		}
 	}()
 	return p
 }
 
-func (p *Provider) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
-	p.ensureBalanceCh <- ensureBalanceRequest{
-		ctx:     ctx,
-		name:    receiverName,
-		address: receiverAddress,
-		assetID: assetID,
-		amount:  amount,
-	}
-
-	return nil
+func (p *Provider) TopUpChan() chan types.TopUpRequest {
+	return p.topUpChan
 }
 
-func (p *Provider) topUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
+func (p *Provider) handleTopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
 	// TODO: remove deposit slack request, once deposited
 	if existDeposit, ok := p.getPendingDeposit(assetID); ok {
 		existDeposit.amount = amount.Add(amount, existDeposit.amount)
@@ -189,7 +180,7 @@ func (p *Provider) setPendingDeposit(assetID string, pending pendingDeposit) {
 	p.pendingDeposits[assetID] = pending
 }
 
-func (p *Provider) StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error {
+func (p *Provider) Stake(ctx context.Context, _, receiverAddress, assetID string, amount *num.Uint, from string) error {
 	asset, err := p.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
 		AssetId: assetID,
 	})
@@ -241,7 +232,6 @@ func (p *Provider) depositERC20(ctx context.Context, asset *vega.Asset, amount *
 		return fmt.Errorf("failed to add erc20 token: %w", err)
 	}
 
-	// TODO: check decimal places
 	if added.Int().LT(amount.Int()) {
 		return fmt.Errorf("deposited less than requested amount")
 	}

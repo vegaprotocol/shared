@@ -68,8 +68,8 @@ func TestService_TopUp(t *testing.T) {
 	asset := "993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede"
 	amount := num.NewUint(988939143512)
 
-	_ = s.TopUpAsync(ctx, "some bot", key, asset, amount)
-	_ = s.account.EnsureBalance(ctx, asset, cache.General, amount, "test")
+	_ = s.TopUp(ctx, "some bot", key, asset, amount)
+	_ = s.account.EnsureBalance(ctx, asset, cache.General, amount, 2, "test")
 }
 
 func TestService_slackDan(t *testing.T) {

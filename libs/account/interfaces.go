@@ -8,11 +8,13 @@ import (
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/types"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
+	"code.vegaprotocol.io/vega/protos/vega"
 	vegaapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
 type dataNode interface {
 	busStreamer
+	AssetByID(ctx context.Context, req *dataapipb.GetAssetRequest) (*vega.Asset, error)
 	PartyAccounts(ctx context.Context, req *dataapipb.ListAccountsRequest) ([]*dataapipb.AccountBalance, error)
 	PartyStake(ctx context.Context, req *dataapipb.GetStakeRequest) (response *dataapipb.GetStakeResponse, err error)
 }
@@ -23,12 +25,12 @@ type busStreamer interface {
 }
 
 type CoinProvider interface {
-	TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error
-	StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error
+	TopUpChan() chan types.TopUpRequest
+	Stake(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint, from string) error
 }
 
 type accountStream interface {
-	init(pubKey string, pauseCh chan types.PauseSignal)
+	init(ctx context.Context, pubKey string, pauseCh chan types.PauseSignal)
 	GetBalances(ctx context.Context, assetID string) (balanceStore, error)
 	GetStake(ctx context.Context) (*num.Uint, error)
 	WaitForStakeLinking(ctx context.Context, pubKey string) error

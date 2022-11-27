@@ -26,6 +26,7 @@ type Service struct {
 	account accountService
 	faucet  faucetClient
 
+	topUpChan        chan types.TopUpRequest
 	walletName       string
 	walletPassphrase string
 	walletConfig     *config.WhaleConfig
@@ -44,6 +45,7 @@ func NewService(
 		wallet: wallet,
 		faucet: faucet,
 
+		topUpChan:        make(chan types.TopUpRequest),
 		account:          account,
 		walletConfig:     config,
 		walletName:       config.WalletName,
@@ -58,11 +60,22 @@ func NewService(
 func (w *Service) Start(ctx context.Context) error {
 	w.log.Info("Starting whale service...")
 
-	pauseCh := make(chan types.PauseSignal)
-
 	go func() {
-		for p := range pauseCh {
-			w.log.Infof("Whale service paused: %v; from %s", p.Pause, p.From)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req := <-w.topUpChan:
+				req.ErrResp <- w.handleTopUp(
+					ctx,
+					req.ReceiverName,
+					req.ReceiverAddress,
+					req.AssetID,
+					req.Amount,
+					req.From,
+				)
+				close(req.ErrResp)
+			}
 		}
 	}()
 
@@ -74,11 +87,15 @@ func (w *Service) Start(ctx context.Context) error {
 	w.node.MustDialConnection(ctx)
 	w.log.Info("Connected to a node")
 
-	w.account.Init(w.walletConfig.WalletPubKey, pauseCh)
+	w.account.Init(ctx, w.walletConfig.WalletPubKey, nil)
 	return nil
 }
 
-func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
+func (w *Service) TopUpChan() chan types.TopUpRequest {
+	return w.topUpChan
+}
+
+func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint, from string) error {
 	w.log.Debugf("Top up for '%s' ...", receiverName)
 
 	if assetID == "" {
@@ -105,7 +122,7 @@ func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress,
 		return nil
 	}
 
-	if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, 100, "Whale"); err != nil {
+	if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, 100, from+">receiverNameWhale"); err != nil {
 		return fmt.Errorf("failed to ensure enough funds: %w", err)
 	}
 
@@ -119,7 +136,7 @@ func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress,
 				ToAccountType:   vtypes.AccountTypeGeneral,
 				Asset:           assetID,
 				Amount:          amount.String(),
-				Reference:       fmt.Sprintf("Liquidity Bot '%s' Top-Up", receiverName),
+				Reference:       fmt.Sprintf("Bot '%s' Top-Up", receiverName),
 				Kind:            &commV1.Transfer_OneOff{OneOff: &commV1.OneOffTransfer{}},
 			},
 		},
@@ -136,6 +153,13 @@ func (w *Service) TopUpAsync(ctx context.Context, receiverName, receiverAddress,
 			"amount":         amount.String(),
 		}).Debugf("Top-up sent")
 
+	w.log.WithFields(log.Fields{"name": receiverName}).Debugf("%s: Waiting for top-up...", from)
+
+	if err := w.account.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
+		return fmt.Errorf("failed to wait for top-up to finalise: %w", err)
+	}
+
+	w.log.WithFields(log.Fields{"name": receiverName}).Debugf("%s: Top-up complete", from)
 	return nil
 }
 
@@ -214,11 +238,21 @@ func (w *Service) depositBuiltin(ctx context.Context, assetID, pubKey string, am
 	return nil
 }
 
-func (w *Service) StakeAsync(ctx context.Context, receiverAddress, assetID string, amount *num.Uint) error {
+func (w *Service) Stake(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint, from string) error {
 	w.log.Debugf("Staking for '%s' ...", receiverAddress)
 
-	if err := w.account.StakeAsync(ctx, receiverAddress, assetID, amount); err != nil {
-		return err
+	if err := w.account.Stake(ctx, receiverName, receiverAddress, assetID, amount, from); err != nil {
+		return fmt.Errorf("failed to stake: %w", err)
+	}
+
+	w.log.WithFields(log.Fields{
+		"receiverName":   receiverName,
+		"receiverPubKey": receiverAddress,
+		"targetAmount":   amount.String(),
+	}).Debugf("%s: Waiting for staking...", from)
+
+	if err := w.account.WaitForStakeLinkingToFinalise(ctx, receiverAddress); err != nil {
+		return fmt.Errorf("failed to finalise stake: %w", err)
 	}
 
 	return nil

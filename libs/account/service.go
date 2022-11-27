@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"fmt"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -31,10 +32,10 @@ func NewAccountService(name string, node dataNode, assetID string, coinProvider 
 	}
 }
 
-func (a *Service) Init(pubKey string, pauseCh chan types.PauseSignal) {
+func (a *Service) Init(ctx context.Context, pubKey string, pauseCh chan types.PauseSignal) {
 	a.stores = make(map[string]balanceStore)
 	a.pubKey = pubKey
-	a.accountStream.init(pubKey, pauseCh)
+	a.accountStream.init(ctx, pubKey, pauseCh)
 }
 
 func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, scale uint64, from string) error {
@@ -63,19 +64,26 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 			"askAmount":    askAmount.String(),
 		}).Debugf("%s: Account balance is less than target amount, depositing...", from)
 
-	if err := a.coinProvider.TopUpAsync(ctx, a.name, a.pubKey, assetID, askAmount); err != nil {
-		return fmt.Errorf("failed to top up: %w", err)
+	errCh := make(chan error)
+
+	a.coinProvider.TopUpChan() <- types.TopUpRequest{
+		Ctx:             ctx,
+		ReceiverAddress: a.pubKey,
+		ReceiverName:    a.name,
+		AssetID:         assetID,
+		Amount:          askAmount,
+		ErrResp:         errCh,
 	}
 
-	defer a.log.WithFields(log.Fields{"name": a.name}).Debugf("%s: Top-up complete", from)
-
-	a.log.WithFields(log.Fields{"name": a.name}).Debugf("%s: Waiting for top-up...", from)
-
-	if err = a.accountStream.WaitForTopUpToFinalise(ctx, a.pubKey, assetID, askAmount, 0); err != nil {
-		return fmt.Errorf("failed to finalise deposit: %w", err)
+	if err = <-errCh; err != nil {
+		return fmt.Errorf("failed to deposit: %w", err)
 	}
 
 	return nil
+}
+
+func (a *Service) WaitForTopUpToFinalise(ctx context.Context, receiverKey, assetID string, amount *num.Uint, timeout time.Duration) error {
+	return a.accountStream.WaitForTopUpToFinalise(ctx, receiverKey, assetID, amount, timeout)
 }
 
 func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error {
@@ -102,27 +110,19 @@ func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey,
 			"targetAmount":   targetAmount.String(),
 		}).Debugf("%s: Account Stake balance is less than target amount, staking...", from)
 
-	if err = a.coinProvider.StakeAsync(ctx, receiverPubKey, assetID, targetAmount); err != nil {
+	if err = a.coinProvider.Stake(ctx, receiverName, receiverPubKey, assetID, targetAmount, from); err != nil {
 		return fmt.Errorf("failed to stake: %w", err)
-	}
-
-	a.log.WithFields(log.Fields{
-		"name":           a.name,
-		"receiverName":   receiverName,
-		"receiverPubKey": receiverPubKey,
-		"partyId":        a.pubKey,
-		"targetAmount":   targetAmount.String(),
-	}).Debugf("%s: Waiting for staking...", from)
-
-	if err = a.accountStream.WaitForStakeLinking(ctx, receiverPubKey); err != nil {
-		return fmt.Errorf("failed to finalise stake: %w", err)
 	}
 
 	return nil
 }
 
-func (a *Service) StakeAsync(ctx context.Context, receiverPubKey, assetID string, amount *num.Uint) error {
-	return a.coinProvider.StakeAsync(ctx, receiverPubKey, assetID, amount)
+func (a *Service) WaitForStakeLinkingToFinalise(ctx context.Context, receiverKey string) error {
+	return a.accountStream.WaitForStakeLinking(ctx, receiverKey)
+}
+
+func (a *Service) Stake(ctx context.Context, receiverName, receiverPubKey, assetID string, amount *num.Uint, from string) error {
+	return a.coinProvider.Stake(ctx, receiverName, receiverPubKey, assetID, amount, from)
 }
 
 func (a *Service) Balance(ctx context.Context) cache.Balance {
