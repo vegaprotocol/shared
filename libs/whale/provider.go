@@ -35,14 +35,6 @@ type Provider struct {
 	log          *log.Entry
 }
 
-type ensureBalanceRequest struct {
-	ctx     context.Context
-	name    string
-	address string
-	assetID string
-	amount  *num.Uint
-}
-
 type slacker struct {
 	*slack.Client // TODO: abstract this out
 	channelID     string
@@ -204,7 +196,6 @@ func (p *Provider) Stake(ctx context.Context, _, receiverAddress, assetID string
 		return fmt.Errorf("failed to stake Vega token for '%s': %w", receiverAddress, err)
 	}
 
-	// TODO: check decimal places
 	if added.Int().LT(amount.Int()) {
 		return fmt.Errorf("staked less than requested amount")
 	}
