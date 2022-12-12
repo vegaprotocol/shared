@@ -11,7 +11,7 @@ import (
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/types"
-	wtypes "code.vegaprotocol.io/shared/libs/wallet/types"
+	"code.vegaprotocol.io/shared/libs/wallet"
 	"code.vegaprotocol.io/shared/libs/whale/config"
 	vtypes "code.vegaprotocol.io/vega/core/types"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
@@ -21,74 +21,53 @@ import (
 )
 
 type Service struct {
-	node    dataNode
-	wallet  walletClient
-	account accountService
-	faucet  faucetClient
+	node          dataNode
+	wallet        wallet.WalletV2
+	account       accountService
+	accountStream types.AccountStream
+	faucet        faucetClient
 
-	topUpChan        chan types.TopUpRequest
-	walletName       string
-	walletPassphrase string
-	walletConfig     *config.WhaleConfig
-	log              *log.Entry
+	topUpChan    chan types.TopUpRequest
+	walletConfig *config.WhaleConfig
+	log          *log.Entry
 }
 
 func NewService(
 	dataNode dataNode,
-	wallet walletClient,
+	wallet wallet.WalletV2,
 	account accountService,
+	accountStream types.AccountStream,
 	faucet faucetClient,
 	config *config.WhaleConfig,
 ) *Service {
-	return &Service{
+	w := &Service{
 		node:   dataNode,
 		wallet: wallet,
 		faucet: faucet,
 
-		topUpChan:        make(chan types.TopUpRequest),
-		account:          account,
-		walletConfig:     config,
-		walletName:       config.WalletName,
-		walletPassphrase: config.WalletPassphrase,
+		topUpChan:     make(chan types.TopUpRequest),
+		account:       account,
+		accountStream: accountStream,
+		walletConfig:  config,
 		log: log.WithFields(log.Fields{
 			"component": "Whale",
-			"name":      config.WalletName,
+			"name":      config.Wallet.Name,
 		}),
 	}
-}
-
-func (w *Service) Start(ctx context.Context) error {
-	w.log.Info("Starting whale service...")
-
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req := <-w.topUpChan:
-				req.ErrResp <- w.handleTopUp(
-					ctx,
-					req.ReceiverName,
-					req.ReceiverAddress,
-					req.AssetID,
-					req.Amount,
-					req.From,
-				)
-				close(req.ErrResp)
-			}
+		for req := range w.topUpChan {
+			req.ErrResp <- w.handleTopUp(
+				req.Ctx,
+				req.ReceiverName,
+				req.ReceiverAddress,
+				req.AssetID,
+				req.Amount,
+				req.From,
+			)
+			close(req.ErrResp)
 		}
 	}()
-
-	if err := w.setupWallet(ctx); err != nil {
-		return fmt.Errorf("failed to login to wallet: %s", err)
-	}
-
-	w.log.Info("Attempting to connect to a node...")
-	w.node.MustDialConnection(ctx)
-	w.log.Info("Connected to a node")
-
-	w.account.Init(ctx, w.walletConfig.WalletPubKey, nil)
-	return nil
+	return w
 }
 
 func (w *Service) TopUpChan() chan types.TopUpRequest {
@@ -102,18 +81,41 @@ func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress
 		return fmt.Errorf("assetID is empty for bot '%s'", receiverName)
 	}
 
-	if receiverAddress == w.walletConfig.WalletPubKey {
+	if receiverAddress == w.wallet.PublicKey() {
 		return fmt.Errorf("whale and bot address cannot be the same")
 	}
 
-	ensureAmount := num.Zero().Mul(amount, num.NewUint(30))
+	if err := w.topUp(ctx, receiverName, receiverAddress, assetID, amount, from); err != nil {
+		return fmt.Errorf("failed to top up: %w", err)
+	}
 
+	w.log.WithFields(
+		log.Fields{
+			"receiverName":   receiverName,
+			"receiverPubKey": receiverAddress,
+			"assetID":        assetID,
+			"amount":         amount.String(),
+		}).Debugf("Top-up sent")
+
+	w.log.WithFields(log.Fields{"name": receiverName}).Debugf("%s: Waiting for top-up...", from)
+
+	if err := w.accountStream.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
+		return fmt.Errorf("failed to wait for top-up to finalise: %w", err)
+	}
+	w.log.WithFields(log.Fields{"name": receiverName}).Debugf("%s: Top-up complete", from)
+
+	return nil
+}
+
+func (w *Service) topUp(ctx context.Context, receiverName string, receiverAddress string, assetID string, amount *num.Uint, from string) error {
 	asset, err := w.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
 		AssetId: assetID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get asset by id: %w", err)
 	}
+
+	ensureAmount := num.Zero().Mul(amount, num.NewUint(30))
 
 	if builtin := asset.Details.GetBuiltinAsset(); builtin != nil {
 		if err := w.depositBuiltin(ctx, assetID, receiverAddress, ensureAmount, builtin); err != nil {
@@ -122,13 +124,12 @@ func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress
 		return nil
 	}
 
-	if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, 100, from+">receiverNameWhale"); err != nil {
+	// dp is 0 because the amount had already been corrected for the DP
+	if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, 0, 100, from+">receiverNameWhale"); err != nil {
 		return fmt.Errorf("failed to ensure enough funds: %w", err)
 	}
 
-	err = w.wallet.SignTx(ctx, &v1.SubmitTransactionRequest{
-		PubKey:    w.walletConfig.WalletPubKey,
-		Propagate: true,
+	_, err = w.wallet.SendTransaction(ctx, &v1.SubmitTransactionRequest{
 		Command: &v1.SubmitTransactionRequest_Transfer{
 			Transfer: &commV1.Transfer{
 				FromAccountType: vtypes.AccountTypeGeneral,
@@ -144,61 +145,6 @@ func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress
 	if err != nil {
 		return fmt.Errorf("failed to top-up bot '%s': %w", receiverName, err)
 	}
-
-	w.log.WithFields(
-		log.Fields{
-			"receiverName":   receiverName,
-			"receiverPubKey": receiverAddress,
-			"assetID":        assetID,
-			"amount":         amount.String(),
-		}).Debugf("Top-up sent")
-
-	w.log.WithFields(log.Fields{"name": receiverName}).Debugf("%s: Waiting for top-up...", from)
-
-	if err := w.account.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
-		return fmt.Errorf("failed to wait for top-up to finalise: %w", err)
-	}
-
-	w.log.WithFields(log.Fields{"name": receiverName}).Debugf("%s: Top-up complete", from)
-	return nil
-}
-
-func (w *Service) setupWallet(ctx context.Context) error {
-	if err := w.wallet.LoginWallet(ctx, w.walletName, w.walletPassphrase); err != nil {
-		if err.Error() == `{"error":"wallet does not exist"}` {
-			mnemonic, err := w.wallet.CreateWallet(ctx, w.walletName, w.walletPassphrase)
-			if err != nil {
-				return fmt.Errorf("failed to create wallet: %w", err)
-			}
-			w.log.WithFields(log.Fields{"mnemonic": mnemonic}).Info("Created and logged into wallet")
-		} else {
-			return fmt.Errorf("failed to log into wallet: %w", err)
-		}
-	}
-
-	w.log.Info("Logged into wallet")
-
-	if w.walletConfig.WalletPubKey == "" {
-		publicKeys, err := w.wallet.ListPublicKeys(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to list public keys: %w", err)
-		}
-
-		if len(publicKeys) == 0 {
-			key, err := w.wallet.GenerateKeyPair(ctx, w.walletPassphrase, []wtypes.Meta{})
-			if err != nil {
-				return fmt.Errorf("failed to generate keypair: %w", err)
-			}
-			w.walletConfig.WalletPubKey = key.Pub
-			w.log.WithFields(log.Fields{"pubKey": w.walletConfig.WalletPubKey}).Debug("Created keypair")
-		} else {
-			w.walletConfig.WalletPubKey = publicKeys[0]
-			w.log.WithFields(log.Fields{"pubKey": w.walletConfig.WalletPubKey}).Debug("Using existing keypair")
-		}
-	}
-
-	w.log = w.log.WithFields(log.Fields{"pubkey": w.walletConfig.WalletPubKey})
-
 	return nil
 }
 
@@ -251,7 +197,7 @@ func (w *Service) Stake(ctx context.Context, receiverName, receiverAddress, asse
 		"targetAmount":   amount.String(),
 	}).Debugf("%s: Waiting for staking...", from)
 
-	if err := w.account.WaitForStakeLinkingToFinalise(ctx, receiverAddress); err != nil {
+	if err := w.accountStream.WaitForStakeLinkingToFinalise(ctx, receiverAddress); err != nil {
 		return fmt.Errorf("failed to finalise stake: %w", err)
 	}
 

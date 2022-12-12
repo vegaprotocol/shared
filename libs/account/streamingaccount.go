@@ -24,40 +24,33 @@ type account struct {
 	log           *log.Entry
 	node          dataNode
 	balanceStores *balanceStores
-	walletPubKey  string
 	busEvProc     busEventer
 
 	mu              sync.Mutex
 	waitingDeposits map[string]*num.Uint
 }
 
-func NewAccountStream(name string, node dataNode) *account {
+func NewStream(name string, node dataNode, pauseCh chan types.PauseSignal) *account {
 	return &account{
 		name:            name,
 		log:             log.WithField("component", "AccountStreamer"),
 		node:            node,
 		waitingDeposits: make(map[string]*num.Uint),
+		busEvProc:       events.NewBusEventProcessor(node, events.WithPauseCh(pauseCh)),
+		balanceStores: &balanceStores{
+			balanceStores: make(map[string]balanceStore),
+		},
 	}
 }
 
-func (a *account) init(ctx context.Context, pubKey string, pauseCh chan types.PauseSignal) {
-	a.walletPubKey = pubKey
-	a.busEvProc = events.NewBusEventProcessor(a.node, events.WithPauseCh(pauseCh))
-	a.balanceStores = &balanceStores{
-		balanceStores: make(map[string]balanceStore),
-	}
-
-	a.subscribeToAccountEvents(ctx)
-}
-
-func (a *account) GetBalances(ctx context.Context, assetID string) (balanceStore, error) {
+func (a *account) GetBalances(ctx context.Context, assetID string, pubKey string) (balanceStore, error) {
 	if store, ok := a.balanceStores.get(assetID); ok {
 		return store, nil
 	}
 
 	accounts, err := a.node.PartyAccounts(ctx, &dataapipb.ListAccountsRequest{
 		Filter: &dataapipb.AccountFilter{
-			PartyIds: []string{a.walletPubKey},
+			PartyIds: []string{pubKey},
 			AssetId:  assetID,
 		},
 	})
@@ -79,12 +72,14 @@ func (a *account) GetBalances(ctx context.Context, assetID string) (balanceStore
 		}
 	}
 
+	a.subscribeToAccountEvents(ctx, pubKey)
+
 	return store, nil
 }
 
-func (a *account) GetStake(ctx context.Context) (*num.Uint, error) {
+func (a *account) GetStake(ctx context.Context, pubKey string) (*num.Uint, error) {
 	partyStakeResp, err := a.node.PartyStake(ctx, &dataapipb.GetStakeRequest{
-		PartyId: a.walletPubKey,
+		PartyId: pubKey,
 	})
 	if err != nil {
 		return nil, err
@@ -98,19 +93,19 @@ func (a *account) GetStake(ctx context.Context) (*num.Uint, error) {
 	return stake, nil
 }
 
-func (a *account) subscribeToAccountEvents(ctx context.Context) {
+func (a *account) subscribeToAccountEvents(ctx context.Context, pubKey string) {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{
 			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
 		},
-		PartyId: a.walletPubKey,
+		PartyId: pubKey,
 	}
 
 	proc := func(rsp *coreapipb.ObserveEventBusResponse) (bool, error) {
 		for _, event := range rsp.Events {
 			acct := event.GetAccount()
 			// filter out any that are for different assets
-			store, err := a.GetBalances(ctx, acct.Asset)
+			store, err := a.GetBalances(ctx, acct.Asset, pubKey)
 			if err != nil {
 				a.log.WithFields(log.Fields{
 					"error": err.Error(),
@@ -152,7 +147,7 @@ func (a *account) AssetByID(ctx context.Context, assetID string) (*vega.Asset, e
 // WaitForTopUpToFinalise is a blocking call that waits for the top-up finalise event to be received.
 func (a *account) WaitForTopUpToFinalise(
 	ctx context.Context,
-	walletPubKey,
+	pubKey,
 	assetID string,
 	expectAmount *num.Uint,
 	timeout time.Duration,
@@ -170,7 +165,7 @@ func (a *account) WaitForTopUpToFinalise(
 			eventspb.BusEventType_BUS_EVENT_TYPE_TRANSFER,
 			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
 		},
-		// PartyId: walletPubKey, TODO: ??
+		// PartyId: pubKey, TODO: ??
 		// AssetId: assetID, TODO: ??
 	}
 
@@ -213,7 +208,7 @@ func (a *account) WaitForTopUpToFinalise(
 			}
 
 			// filter out any that are for different assets, or not finalized
-			if partyId != walletPubKey || asset != assetID {
+			if partyId != pubKey || asset != assetID {
 				continue
 			}
 
@@ -245,11 +240,11 @@ func (a *account) WaitForTopUpToFinalise(
 			if gotAmount.GTE(expect) {
 				a.log.WithFields(log.Fields{
 					"name":    a.name,
-					"partyId": walletPubKey,
+					"partyId": pubKey,
 					"balance": gotAmount.String(),
 				}).Info("TopUp finalised")
 				a.deleteWaitingDeposit(assetID)
-				if _, err = a.GetBalances(ctx, assetID); err != nil {
+				if _, err = a.GetBalances(ctx, assetID, pubKey); err != nil {
 					a.log.WithFields(log.Fields{
 						"error": err.Error(),
 					}).Error("failed to set balance after top-up")
@@ -258,7 +253,7 @@ func (a *account) WaitForTopUpToFinalise(
 			} else if !gotAmount.IsZero() {
 				a.log.WithFields(log.Fields{
 					"name":         a.name,
-					"partyId":      a.walletPubKey,
+					"partyId":      pubKey,
 					"gotAmount":    gotAmount.String(),
 					"targetAmount": expect.String(),
 				}).Info("Received funds, but balance is less than expected")
@@ -305,7 +300,7 @@ func (a *account) deleteWaitingDeposit(assetID string) {
 	delete(a.waitingDeposits, assetID)
 }
 
-func (a *account) WaitForStakeLinking(ctx context.Context, pubKey string) error {
+func (a *account) WaitForStakeLinkingToFinalise(ctx context.Context, pubKey string) error {
 	req := &coreapipb.ObserveEventBusRequest{
 		Type: []eventspb.BusEventType{eventspb.BusEventType_BUS_EVENT_TYPE_STAKE_LINKING},
 	}

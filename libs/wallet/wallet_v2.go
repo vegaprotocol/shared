@@ -21,13 +21,13 @@ import (
 )
 
 type WalletV2Service struct {
-	network     string
-	networkURL  string
-	walletName  string
-	passphrase  string
-	pubKey      string
-	nodeAddress string
-	numRetries  uint64
+	network        string
+	networkFileURL string
+	walletName     string
+	passphrase     string
+	pubKey         string
+	nodeAddress    string
+	numRetries     uint64
 
 	walletStore  api.WalletStore
 	networkStore api.NetworkStore
@@ -36,48 +36,35 @@ type WalletV2Service struct {
 	apiDescribeWallet  jsonrpc.Command
 	apiListKeys        jsonrpc.Command
 	apiGenerateKey     jsonrpc.Command
-	apiSignTransaction jsonrpc.Command
+	apiSendTransaction jsonrpc.Command
 }
 
 type WalletV2 interface {
-	SetupWallet(ctx context.Context) (string, error)
-	SignTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error)
-	SignJSONTransaction(ctx context.Context, txJsn string) (*commandspb.Transaction, error)
+	PublicKey() string
+	SendTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error)
+	SendJSONTransaction(ctx context.Context, txJsn string) (*commandspb.Transaction, error)
 }
 
-type WalletOption func(*WalletV2Service)
-
-func WithPublicKey(pubKey string) WalletOption {
-	return func(w *WalletV2Service) {
-		w.pubKey = pubKey
+func NewWalletV2Service(config *Config) (*WalletV2Service, error) {
+	if config == nil {
+		return nil, errors.New("config is nil")
 	}
-}
-
-func WithNumRetries(numRetries uint64) WalletOption {
-	return func(w *WalletV2Service) {
-		w.numRetries = numRetries
+	if config.Name == "" {
+		return nil, errors.New("wallet name is required")
 	}
-}
-
-func WithNodeURL(nodeURL string) WalletOption {
-	return func(w *WalletV2Service) {
-		w.nodeAddress = nodeURL
+	if config.Passphrase == "" {
+		return nil, errors.New("passphrase is required")
 	}
-}
-
-func WithNetworkURL(networkURL string) WalletOption {
-	return func(w *WalletV2Service) {
-		w.network = networkURL
+	if config.StorePath == "" {
+		return nil, errors.New("store path is required")
 	}
-}
 
-func NewWalletV2Service(walletName, passphrase, storePath string, opts ...WalletOption) (*WalletV2Service, error) {
-	walletStore, err := wallets.InitialiseStore(storePath)
+	walletStore, err := wallets.InitialiseStore(config.StorePath)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't initialise wallets store: %w", err)
 	}
 
-	networkStore, err := v1.InitialiseStore(paths.New(storePath))
+	networkStore, err := v1.InitialiseStore(paths.New(config.StorePath))
 	if err != nil {
 		return nil, fmt.Errorf("couldn't initialise network store: %w", err)
 	}
@@ -94,79 +81,94 @@ func NewWalletV2Service(walletName, passphrase, storePath string, opts ...Wallet
 	}
 
 	w := &WalletV2Service{
-		walletName:   walletName,
-		passphrase:   passphrase,
-		walletStore:  walletStore,
-		networkStore: networkStore,
-		numRetries:   10,
+		walletName:     config.Name,
+		passphrase:     config.Passphrase,
+		walletStore:    walletStore,
+		networkStore:   networkStore,
+		networkFileURL: config.NetworkFileURL,
+		nodeAddress:    config.NodeURL,
+		pubKey:         config.PubKey,
+		numRetries:     10,
 
 		apiCreateWallet:    api.NewAdminCreateWallet(walletStore),
 		apiDescribeWallet:  api.NewAdminDescribeWallet(walletStore),
 		apiListKeys:        api.NewAdminListKeys(walletStore),
 		apiGenerateKey:     api.NewAdminGenerateKey(walletStore),
-		apiSignTransaction: api.NewAdminSignTransaction(walletStore, networkStore, nodeSelectorBuilder),
+		apiSendTransaction: api.NewAdminSendTransaction(walletStore, networkStore, nodeSelectorBuilder),
 	}
 
-	for _, opt := range opts {
-		opt(w)
-	}
-
-	if w.networkURL != "" {
-		w.network = strings.Split(strings.Split(w.networkURL, ".toml")[0], "vegawallet-")[1] // hacky
+	if w.networkFileURL != "" {
+		w.network = strings.Split(strings.Split(w.networkFileURL, ".toml")[0], "vegawallet-")[1] // hacky
 		networkImportParams := api.AdminImportNetworkParams{
 			Name:      w.network,
-			URL:       w.networkURL,
+			URL:       w.networkFileURL,
 			Overwrite: true,
 		}
 		_, errDetails := api.NewAdminImportNetwork(networkStore).Handle(context.Background(), networkImportParams, jsonrpc.RequestMetadata{})
 		if errDetails != nil {
 			return nil, errors.New(errDetails.Data)
 		}
+	} else if w.nodeAddress == "" {
+		return nil, errors.New("either network file URL or node address must be provided")
+	}
+
+	if w.pubKey == "" {
+		if err = w.setupWallet(context.Background()); err != nil {
+			return nil, fmt.Errorf("failed to login to wallet: %s", err)
+		}
 	}
 
 	return w, nil
 }
 
-func (w *WalletV2Service) SetupWallet(ctx context.Context) (string, error) {
+func (w *WalletV2Service) PublicKey() string {
+	return w.pubKey
+}
+
+func (w *WalletV2Service) setupWallet(ctx context.Context) error {
 	_, err := w.describeWallet(ctx)
 	if err != nil {
 		if err.Error() == api.ErrWalletDoesNotExist.Error() {
 			createResp, err := w.createWallet(ctx)
 			if err != nil {
-				return "", fmt.Errorf("failed to create wallet: %w", err)
+				return fmt.Errorf("failed to create wallet: %w", err)
 			}
 			zap.L().Debug("Created wallet",
 				zap.String("pubKey", createResp.Key.PublicKey),
 				zap.String("wallet", w.walletName),
 				zap.String("recoveryPhrase", createResp.Wallet.RecoveryPhrase))
 		} else {
-			return "", fmt.Errorf("failed to describe wallet: %w", err)
+			return fmt.Errorf("failed to describe wallet: %w", err)
 		}
 	} else {
 		keysResp, err := w.listKeys(ctx)
 		if err != nil {
-			return "", fmt.Errorf("failed to list keys: %w", err)
+			return fmt.Errorf("failed to list keys: %w", err)
 		}
 		if len(keysResp.PublicKeys) == 0 {
 			_, err = w.generateKey(ctx)
 			if err != nil {
-				return "", fmt.Errorf("failed to generate key: %w", err)
+				return fmt.Errorf("failed to generate key: %w", err)
 			}
 		}
 	}
 
-	return w.pubKey, nil
+	return nil
 }
 
-func (w *WalletV2Service) SignTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error) {
+func (w *WalletV2Service) SendTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error) {
+	if tx.PubKey == "" {
+		tx.PubKey = w.pubKey
+	}
+	tx.Propagate = true
 	jsn, err := (&jsonpb.Marshaler{Indent: "  "}).MarshalToString(tx)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't marshal transaction: %w", err)
 	}
-	return w.SignJSONTransaction(ctx, jsn)
+	return w.SendJSONTransaction(ctx, jsn)
 }
 
-func (w *WalletV2Service) SignJSONTransaction(ctx context.Context, payload string) (*commandspb.Transaction, error) {
+func (w *WalletV2Service) SendJSONTransaction(ctx context.Context, payload string) (*commandspb.Transaction, error) {
 	txPayload := make(map[string]any)
 	if err := json.Unmarshal([]byte(payload), &txPayload); err != nil {
 		return nil, fmt.Errorf("couldn't unmarshal transaction payload: %w", err)
@@ -187,11 +189,11 @@ func (w *WalletV2Service) SignJSONTransaction(ctx context.Context, payload strin
 		params.Network = w.network
 	}
 
-	rawResult, errDetails := w.apiSignTransaction.Handle(ctx, params, jsonrpc.RequestMetadata{})
+	rawResult, errDetails := w.apiSendTransaction.Handle(ctx, params, jsonrpc.RequestMetadata{})
 	if errDetails != nil {
 		return nil, errors.New(errDetails.Data)
 	}
-	return rawResult.(api.AdminSignTransactionResult).Tx, nil
+	return rawResult.(api.AdminSendTransactionResult).Tx, nil
 }
 
 func (w *WalletV2Service) createWallet(ctx context.Context) (api.AdminCreateWalletResult, error) {

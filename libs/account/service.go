@@ -3,7 +3,7 @@ package account
 import (
 	"context"
 	"fmt"
-	"time"
+	"math"
 
 	log "github.com/sirupsen/logrus"
 
@@ -22,23 +22,19 @@ type Service struct {
 	log           *log.Entry
 }
 
-func NewAccountService(name string, node dataNode, assetID string, coinProvider CoinProvider) *Service {
+func NewService(name, pubKey, assetID string, accountStream accountStream, coinProvider CoinProvider) *Service {
 	return &Service{
 		name:          name,
+		pubKey:        pubKey,
 		assetID:       assetID,
-		accountStream: NewAccountStream(name, node),
+		stores:        make(map[string]balanceStore),
+		accountStream: accountStream,
 		coinProvider:  coinProvider,
 		log:           log.WithField("component", "AccountService"),
 	}
 }
 
-func (a *Service) Init(ctx context.Context, pubKey string, pauseCh chan types.PauseSignal) {
-	a.stores = make(map[string]balanceStore)
-	a.pubKey = pubKey
-	a.accountStream.init(ctx, pubKey, pauseCh)
-}
-
-func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, scale uint64, from string) error {
+func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn func(cache.Balance) *num.Uint, targetAmount *num.Uint, dp, scale uint64, from string) error {
 	store, err := a.getStore(ctx, assetID)
 	if err != nil {
 		return err
@@ -53,6 +49,15 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 	}
 
 	askAmount := num.Zero().Mul(targetAmount, num.NewUint(scale))
+	asset, err := a.accountStream.AssetByID(ctx, assetID)
+	if err != nil {
+		return fmt.Errorf("failed to get asset by id: %w", err)
+	}
+
+	if assetDP := asset.Details.Decimals; dp > 0 && assetDP > dp {
+		dpDiff := assetDP - dp
+		askAmount = askAmount.Div(askAmount, num.NewUint(uint64(math.Pow10(int(dpDiff)))))
+	}
 
 	a.log.WithFields(
 		log.Fields{
@@ -82,16 +87,12 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 	return nil
 }
 
-func (a *Service) WaitForTopUpToFinalise(ctx context.Context, receiverKey, assetID string, amount *num.Uint, timeout time.Duration) error {
-	return a.accountStream.WaitForTopUpToFinalise(ctx, receiverKey, assetID, amount, timeout)
-}
-
 func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey, assetID string, targetAmount *num.Uint, from string) error {
 	if receiverPubKey == "" {
 		return fmt.Errorf("receiver public key is empty")
 	}
 
-	stake, err := a.accountStream.GetStake(ctx)
+	stake, err := a.accountStream.GetStake(ctx, receiverPubKey)
 	if err != nil {
 		return err
 	}
@@ -117,10 +118,6 @@ func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey,
 	return nil
 }
 
-func (a *Service) WaitForStakeLinkingToFinalise(ctx context.Context, receiverKey string) error {
-	return a.accountStream.WaitForStakeLinking(ctx, receiverKey)
-}
-
 func (a *Service) Stake(ctx context.Context, receiverName, receiverPubKey, assetID string, amount *num.Uint, from string) error {
 	return a.coinProvider.Stake(ctx, receiverName, receiverPubKey, assetID, amount, from)
 }
@@ -138,7 +135,7 @@ func (a *Service) getStore(ctx context.Context, assetID string) (balanceStore, e
 	var err error
 	store, ok := a.stores[assetID]
 	if !ok {
-		store, err = a.accountStream.GetBalances(ctx, assetID)
+		store, err = a.accountStream.GetBalances(ctx, assetID, a.pubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialise balances for '%s': %w", assetID, err)
 		}

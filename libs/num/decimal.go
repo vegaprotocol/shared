@@ -1,6 +1,7 @@
 package num
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/shopspring/decimal"
@@ -68,4 +69,11 @@ func MinD(a, b Decimal) Decimal {
 		return a
 	}
 	return b
+}
+
+func MulFrac(n *Uint, x float64, precision float64) *Uint {
+	val := NewUint(uint64(x * math.Pow(10, precision)))
+	val.Mul(val, n)
+	val.Div(val, NewUint(uint64(math.Pow(10, precision))))
+	return val
 }

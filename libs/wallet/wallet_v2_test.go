@@ -17,10 +17,10 @@ func TestWalletV2Service_SetupWallet(t *testing.T) {
 	t.Skipf("just for manual testing, for now")
 
 	type fields struct {
-		networkURL string
-		walletName string
-		passphrase string
-		storePath  string
+		networkFileURL string
+		walletName     string
+		passphrase     string
+		storePath      string
 	}
 	tests := []struct {
 		name    string
@@ -30,35 +30,26 @@ func TestWalletV2Service_SetupWallet(t *testing.T) {
 		{
 			name: "happy path",
 			fields: fields{
-				networkURL: "https://raw.githubusercontent.com/vegaprotocol/networks-internal/main/devnet1/vegawallet-devnet1.toml",
-				walletName: vgrand.RandomStr(5),
-				passphrase: vgrand.RandomStr(5),
-				storePath:  paths.VegaHome,
+				networkFileURL: "https://raw.githubusercontent.com/vegaprotocol/networks-internal/main/devnet1/vegawallet-devnet1.toml",
+				walletName:     vgrand.RandomStr(5),
+				passphrase:     vgrand.RandomStr(5),
+				storePath:      paths.VegaHome,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w, err := NewWalletV2Service(
-				tt.fields.walletName,
-				tt.fields.passphrase,
-				tt.fields.storePath,
-				WithNetworkURL(tt.fields.networkURL),
+				&Config{
+					Name:           tt.fields.walletName,
+					Passphrase:     tt.fields.passphrase,
+					StorePath:      tt.fields.storePath,
+					NetworkFileURL: tt.fields.networkFileURL,
+				},
 			)
 			require.NoError(t, err)
 
-			got, err := w.SetupWallet(context.Background())
-			if (err != nil) != tt.wantErr {
-				t.Errorf("SetupWallet() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got == "" {
-				t.Errorf("SetupWallet() got = %v", got)
-			}
-
 			tx := &walletpb.SubmitTransactionRequest{
-				PubKey:    w.pubKey,
-				Propagate: true,
 				Command: &walletpb.SubmitTransactionRequest_Transfer{
 					Transfer: &commV1.Transfer{
 						FromAccountType: vtypes.AccountTypeGeneral,
@@ -71,7 +62,7 @@ func TestWalletV2Service_SetupWallet(t *testing.T) {
 					},
 				},
 			}
-			signResp, err := w.SignTransaction(context.Background(), tx)
+			signResp, err := w.SendTransaction(context.Background(), tx)
 			require.NoError(t, err)
 
 			t.Logf("signResp: %v", signResp)

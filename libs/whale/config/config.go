@@ -1,11 +1,13 @@
 package config
 
-import "time"
+import (
+	"time"
+
+	"code.vegaprotocol.io/shared/libs/wallet"
+)
 
 type WhaleConfig struct {
-	WalletPubKey     string            `yaml:"walletPubKey"`
-	WalletName       string            `yaml:"walletName"`
-	WalletPassphrase string            `yaml:"walletPassphrase"`
+	Wallet           *wallet.Config    `yaml:"wallet"`
 	OwnerPrivateKeys map[string]string `yaml:"ownerPrivateKeys"`
 	FaucetURL        string            `yaml:"faucetURL"`
 	FaucetRateLimit  time.Duration     `yaml:"faucetRateLimit"`

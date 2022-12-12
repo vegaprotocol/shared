@@ -2,7 +2,6 @@ package account
 
 import (
 	"context"
-	"time"
 
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
@@ -13,13 +12,9 @@ import (
 )
 
 type dataNode interface {
-	busStreamer
 	AssetByID(ctx context.Context, req *dataapipb.GetAssetRequest) (*vega.Asset, error)
 	PartyAccounts(ctx context.Context, req *dataapipb.ListAccountsRequest) ([]*dataapipb.AccountBalance, error)
 	PartyStake(ctx context.Context, req *dataapipb.GetStakeRequest) (response *dataapipb.GetStakeResponse, err error)
-}
-
-type busStreamer interface {
 	MustDialConnection(ctx context.Context)
 	ObserveEventBus(ctx context.Context) (client vegaapipb.CoreService_ObserveEventBusClient, err error)
 }
@@ -30,11 +25,9 @@ type CoinProvider interface {
 }
 
 type accountStream interface {
-	init(ctx context.Context, pubKey string, pauseCh chan types.PauseSignal)
-	GetBalances(ctx context.Context, assetID string) (balanceStore, error)
-	GetStake(ctx context.Context) (*num.Uint, error)
-	WaitForStakeLinking(ctx context.Context, pubKey string) error
-	WaitForTopUpToFinalise(ctx context.Context, walletPubKey, assetID string, amount *num.Uint, timeout time.Duration) error
+	AssetByID(ctx context.Context, assetID string) (*vega.Asset, error)
+	GetBalances(ctx context.Context, assetID string, pubKey string) (balanceStore, error)
+	GetStake(ctx context.Context, pubKey string) (*num.Uint, error)
 }
 
 type balanceStore interface {
