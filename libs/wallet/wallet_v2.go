@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/jsonpb"
+	"go.uber.org/zap"
 
 	"code.vegaprotocol.io/vega/libs/jsonrpc"
 	"code.vegaprotocol.io/vega/logging"
@@ -73,12 +74,12 @@ func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, 
 	nodeSelectorBuilder := func(hosts []string, retries uint64) (node.Selector, error) {
 		nodes := make([]node.Node, len(hosts))
 		for i, host := range hosts {
-			nodes[i], err = node.NewRetryingNode(log.Logger, host, retries)
+			nodes[i], err = node.NewRetryingNode(zap.L(), host, retries)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't initialise retrying node: %w", err)
 			}
 		}
-		return node.NewRoundRobinSelector(log.Logger, nodes...)
+		return node.NewRoundRobinSelector(zap.L(), nodes...)
 	}
 
 	w := &WalletV2Service{
