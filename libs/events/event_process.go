@@ -6,23 +6,22 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	e "code.vegaprotocol.io/shared/libs/errors"
 	"code.vegaprotocol.io/shared/libs/types"
+	"code.vegaprotocol.io/vega/logging"
 	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
 )
 
 type busEventProcessor struct {
 	node    busStreamer
-	log     *log.Entry
+	log     *logging.Logger
 	pauseCh chan types.PauseSignal
 }
 
-func NewBusEventProcessor(node busStreamer, opts ...Option) *busEventProcessor {
+func NewBusEventProcessor(log *logging.Logger, node busStreamer, opts ...Option) *busEventProcessor {
 	b := &busEventProcessor{
 		node: node,
-		log:  log.WithFields(log.Fields{"component": "EventProcessor", "event": "EventBus"}),
+		log:  log.Named("EventProcessor"),
 	}
 
 	for _, opt := range opts {
@@ -68,12 +67,9 @@ func (b *busEventProcessor) ProcessEvents(
 						return
 					}
 
-					b.log.WithFields(
-						log.Fields{
-							"error": err.Error(),
-							"name":  name,
-						},
-					).Warningf("Stream closed, resubscribing...")
+					b.log.With(
+						logging.String("name", name),
+					).Warn("Stream closed, resubscribing...", logging.Error(err))
 
 					b.pause(true, name)
 					s = b.mustGetStream(ctx, name, req)
@@ -83,10 +79,9 @@ func (b *busEventProcessor) ProcessEvents(
 
 				stop, err = process(rsp)
 				if err != nil {
-					b.log.WithFields(log.Fields{
-						"error": err.Error(),
-						"name":  name,
-					}).Warning("Unable to process event")
+					b.log.With(
+						logging.String("name", name),
+					).Warn("Unable to process event")
 					select {
 					case errCh <- err:
 					default:
@@ -113,32 +108,31 @@ func (b *busEventProcessor) mustGetStream(
 
 	for s, err = b.getStream(ctx, req); err != nil; s, err = b.getStream(ctx, req) {
 		if errors.Unwrap(err).Error() == e.ErrConnectionNotReady.Error() {
-			b.log.WithFields(log.Fields{
-				"name":    name,
-				"error":   err.Error(),
-				"attempt": attempt,
-			}).Warning("Node is not ready, reconnecting")
+			b.log.With(
+				logging.String("name", name),
+				logging.Int("attempt", attempt),
+			).Warn("Node is not ready, reconnecting", logging.Error(err))
 
 			b.node.MustDialConnection(ctx)
 
-			b.log.WithFields(log.Fields{
-				"name":    name,
-				"attempt": attempt,
-			}).Debug("Node reconnected, reattempting to subscribe to stream")
+			b.log.With(
+				logging.String("name", name),
+				logging.Int("attempt", attempt),
+			).Debug("Node reconnected, reattempting to subscribe to stream")
 		} else if ctx.Err() == context.DeadlineExceeded {
-			b.log.WithFields(log.Fields{
-				"name": name,
-			}).Warning("Deadline exceeded. Stopping event processor")
+			b.log.With(
+				logging.String("name", name),
+			).Warn("Deadline exceeded. Stopping event processor")
 
 			break
 		} else {
 			attempt++
 
-			b.log.WithFields(log.Fields{
-				"name":    name,
-				"error":   err.Error(),
-				"attempt": attempt,
-			}).Errorf("Failed to subscribe to stream, retrying in %s...", sleepTime)
+			b.log.With(
+				logging.String("name", name),
+				logging.Int("attempt", attempt),
+				logging.Duration("sleep_time", sleepTime),
+			).Error("Failed to subscribe to stream, retrying...", logging.Error(err))
 
 			time.Sleep(sleepTime)
 		}

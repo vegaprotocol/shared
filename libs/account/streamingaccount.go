@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/events"
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/types"
+	"code.vegaprotocol.io/vega/logging"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	coreapipb "code.vegaprotocol.io/vega/protos/vega/api/v1"
@@ -21,7 +21,7 @@ import (
 
 type account struct {
 	name          string
-	log           *log.Entry
+	log           *logging.Logger
 	node          dataNode
 	balanceStores *balanceStores
 	busEvProc     busEventer
@@ -30,13 +30,13 @@ type account struct {
 	waitingDeposits map[string]*num.Uint
 }
 
-func NewStream(name string, node dataNode, pauseCh chan types.PauseSignal) *account {
+func NewStream(log *logging.Logger, name string, node dataNode, pauseCh chan types.PauseSignal) *account {
 	return &account{
 		name:            name,
-		log:             log.WithField("component", "AccountStreamer"),
+		log:             log.Named("AccountStreamer"),
 		node:            node,
 		waitingDeposits: make(map[string]*num.Uint),
-		busEvProc:       events.NewBusEventProcessor(node, events.WithPauseCh(pauseCh)),
+		busEvProc:       events.NewBusEventProcessor(log, node, events.WithPauseCh(pauseCh)),
 		balanceStores: &balanceStores{
 			balanceStores: make(map[string]balanceStore),
 		},
@@ -63,12 +63,9 @@ func (a *account) GetBalances(ctx context.Context, assetID string, pubKey string
 
 	for _, acc := range accounts {
 		if err = a.setBalanceByType(acc.Type, acc.Balance, store); err != nil {
-			a.log.WithFields(
-				log.Fields{
-					"error":       err.Error(),
-					"accountType": acc.Type.String(),
-				},
-			).Error("failed to set account balance")
+			a.log.Error("failed to set account balance",
+				logging.String("accountType", acc.Type.String()),
+				logging.Error(err))
 		}
 	}
 
@@ -107,19 +104,14 @@ func (a *account) subscribeToAccountEvents(ctx context.Context, pubKey string) {
 			// filter out any that are for different assets
 			store, err := a.GetBalances(ctx, acct.Asset, pubKey)
 			if err != nil {
-				a.log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Error("failed to init balance store")
+				a.log.Error("failed to init balance store", logging.Error(err))
 				return true, err
 			}
 
 			if err := a.setBalanceByType(acct.Type, acct.Balance, store); err != nil {
-				a.log.WithFields(
-					log.Fields{
-						"error":       err.Error(),
-						"accountType": acct.Type.String(),
-					},
-				).Error("failed to set account balance")
+				a.log.Error("failed to set account balance",
+					logging.String("accountType", acct.Type.String()),
+					logging.Error(err))
 			}
 		}
 		return false, nil
@@ -222,7 +214,8 @@ func (a *account) WaitForTopUpToFinalise(
 				continue
 			}
 
-			if balance == "" {
+			// TODO: either check 0 or status
+			if balance == "" || balance == "0" {
 				continue
 			}
 
@@ -238,25 +231,23 @@ func (a *account) WaitForTopUpToFinalise(
 			}
 
 			if gotAmount.GTE(expect) {
-				a.log.WithFields(log.Fields{
-					"name":    a.name,
-					"partyId": pubKey,
-					"balance": gotAmount.String(),
-				}).Info("TopUp finalised")
+				a.log.With(
+					logging.String("name", a.name),
+					logging.String("partyId", pubKey),
+					logging.String("balance", gotAmount.String()),
+				).Info("TopUp finalised")
 				a.deleteWaitingDeposit(assetID)
 				if _, err = a.GetBalances(ctx, assetID, pubKey); err != nil {
-					a.log.WithFields(log.Fields{
-						"error": err.Error(),
-					}).Error("failed to set balance after top-up")
+					a.log.Error("failed to set balance after top-up", logging.Error(err))
 				}
 				return true, nil
 			} else if !gotAmount.IsZero() {
-				a.log.WithFields(log.Fields{
-					"name":         a.name,
-					"partyId":      pubKey,
-					"gotAmount":    gotAmount.String(),
-					"targetAmount": expect.String(),
-				}).Info("Received funds, but balance is less than expected")
+				a.log.With(
+					logging.String("name", a.name),
+					logging.String("partyId", pubKey),
+					logging.String("gotAmount", gotAmount.String()),
+					logging.String("targetAmount", expect.String()),
+				).Info("Received funds, but balance is less than expected")
 				// if we received fewer funds than expected, keep waiting (e.g. faucet tops-up in multiple iterations)
 			}
 		}
@@ -319,11 +310,11 @@ func (a *account) WaitForStakeLinkingToFinalise(ctx context.Context, pubKey stri
 					return true, fmt.Errorf("stake linking failed: %s", stake.Status.String())
 				}
 			}
-			a.log.WithFields(log.Fields{
-				"name":    a.name,
-				"partyId": stake.Party,
-				"stakeID": stake.Id,
-			}).Info("Received stake linking")
+			a.log.With(
+				logging.String("name", a.name),
+				logging.String("partyId", stake.Party),
+				logging.String("stakeID", stake.Id),
+			).Info("Received stake linking")
 			return true, nil
 		}
 		return false, nil

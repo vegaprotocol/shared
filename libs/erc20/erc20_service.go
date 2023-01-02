@@ -6,11 +6,10 @@ import (
 	"math/big"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/shared/libs/erc20/config"
 	vgethereum "code.vegaprotocol.io/shared/libs/ethereum"
 	"code.vegaprotocol.io/shared/libs/num"
+	"code.vegaprotocol.io/vega/logging"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,10 +20,10 @@ type Service struct {
 	erc20BridgeAddress   common.Address
 	stakingBridgeAddress common.Address
 	syncTimeout          *time.Duration
-	log                  *log.Entry
+	log                  *logging.Logger
 }
 
-func NewService(conf *config.TokenConfig) (*Service, error) {
+func NewService(log *logging.Logger, conf *config.TokenConfig) (*Service, error) {
 	ctx := context.Background()
 
 	var syncTimeout *time.Duration
@@ -43,7 +42,7 @@ func NewService(conf *config.TokenConfig) (*Service, error) {
 		erc20BridgeAddress:   common.HexToAddress(conf.Erc20BridgeAddress),
 		stakingBridgeAddress: common.HexToAddress(conf.StakingBridgeAddress),
 		syncTimeout:          syncTimeout,
-		log:                  log.WithFields(log.Fields{"component": "TokenService"}),
+		log:                  log.Named("ERC20Service"),
 	}, nil
 }
 
@@ -97,10 +96,10 @@ func (s *Service) Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, er
 		return nil, fmt.Errorf("failed to approve and deposit token on erc20 bridge: %w", err)
 	}
 
-	s.log.WithFields(log.Fields{
-		"amount": amount.String(),
-		"pubkey": vegaPubKey,
-	}).Debug("Deposit request sent")
+	s.log.With(
+		logging.String("amount", amount.String()),
+		logging.String("pubkey", vegaPubKey),
+	).Debug("Deposit request sent")
 
 	deposited, overflow := num.UintFromBig(minted)
 	if overflow {
@@ -126,21 +125,19 @@ func (s *Service) mintToken(ctx context.Context, token token, address common.Add
 		return nil, fmt.Errorf("failed to get name of token: %w", err)
 	}
 
-	s.log.WithFields(
-		log.Fields{
-			"token":   name,
-			"amount":  amount,
-			"address": address,
-		}).Debug("Minting new token")
+	s.log.With(
+		logging.String("token", name),
+		logging.String("amount", amount.String()),
+		logging.String("address", address.String()),
+	).Debug("Minting new token")
 
 	var tx *types.Transaction
 	if tx, err = token.MintSync(address, amount); err == nil {
-		s.log.WithFields(
-			log.Fields{
-				"token":   name,
-				"amount":  amount,
-				"address": address,
-			}).Debug("Token minted")
+		s.log.With(
+			logging.String("token", name),
+			logging.String("amount", amount.String()),
+			logging.String("address", address.String()),
+		).Debug("Token minted")
 
 		minted, err := token.GetLastTransferValueSync(ctx, tx)
 		if err != nil {
@@ -149,8 +146,7 @@ func (s *Service) mintToken(ctx context.Context, token token, address common.Add
 		return minted, nil
 	}
 
-	s.log.WithFields(log.Fields{"error": err}).Warn("Minting token failed")
-
+	s.log.Warn("Minting token failed", logging.Error(err))
 	s.log.Debug("Fallback to minting token using hack...")
 
 	// plan B
@@ -164,11 +160,10 @@ func (s *Service) mintToken(ctx context.Context, token token, address common.Add
 	}
 
 	if minted.Cmp(amount) < 0 {
-		s.log.WithFields(
-			log.Fields{
-				"minted": minted,
-				"amount": amount,
-			}).Warning("Minted amount is less than expected")
+		s.log.With(
+			logging.String("minted", minted.String()),
+			logging.String("amount", amount.String()),
+		).Warn("Minted amount is less than expected")
 	}
 
 	return minted, nil
@@ -180,25 +175,23 @@ func (s *Service) approveAndDepositToken(token token, vegaPubKey string, bridge 
 		return fmt.Errorf("failed to get name of token: %w", err)
 	}
 
-	s.log.WithFields(
-		log.Fields{
-			"token":   name,
-			"amount":  amount,
-			"pubkey":  vegaPubKey,
-			"address": bridge.Address(),
-		}).Debug("Approving token")
+	s.log.With(
+		logging.String("token", name),
+		logging.String("amount", amount.String()),
+		logging.String("pubkey", vegaPubKey),
+		logging.String("address", bridge.Address().String()),
+	).Debug("Approving token")
 
 	if _, err = token.ApproveSync(bridge.Address(), amount); err != nil {
 		return fmt.Errorf("failed to approve token: %w", err)
 	}
 
-	s.log.WithFields(
-		log.Fields{
-			"token":   name,
-			"amount":  amount,
-			"pubkey":  vegaPubKey,
-			"address": bridge.Address(),
-		}).Debug("Depositing asset")
+	s.log.With(
+		logging.String("token", name),
+		logging.String("amount", amount.String()),
+		logging.String("pubkey", vegaPubKey),
+		logging.String("address", bridge.Address().String()),
+	).Debug("Depositing asset")
 
 	vegaPubKeyByte32, err := vgethereum.HexStringToByte32Array(vegaPubKey)
 	if err != nil {
@@ -209,13 +202,12 @@ func (s *Service) approveAndDepositToken(token token, vegaPubKey string, bridge 
 		return fmt.Errorf("failed to deposit asset: %w", err)
 	}
 
-	s.log.WithFields(
-		log.Fields{
-			"token":   name,
-			"amount":  amount,
-			"pubkey":  vegaPubKey,
-			"address": bridge.Address(),
-		}).Debug("Token deposited")
+	s.log.With(
+		logging.String("token", name),
+		logging.String("amount", amount.String()),
+		logging.String("pubkey", vegaPubKey),
+		logging.String("address", bridge.Address().String()),
+	).Debug("Token deposited")
 
 	return nil
 }
@@ -226,12 +218,11 @@ func (s *Service) approveAndStakeToken(token token, vegaPubKey string, bridge *v
 		return fmt.Errorf("failed to get name of token: %w", err)
 	}
 
-	s.log.WithFields(
-		log.Fields{
-			"token":   name,
-			"amount":  amount,
-			"address": bridge.Address(),
-		}).Debug("Approving token")
+	s.log.With(
+		logging.String("token", name),
+		logging.String("amount", amount.String()),
+		logging.String("address", bridge.Address().String()),
+	).Debug("Approving token")
 
 	if _, err = token.ApproveSync(bridge.Address(), amount); err != nil {
 		return fmt.Errorf("failed to approve token: %w", err)
@@ -242,23 +233,21 @@ func (s *Service) approveAndStakeToken(token token, vegaPubKey string, bridge *v
 		return err
 	}
 
-	s.log.WithFields(
-		log.Fields{
-			"token":      name,
-			"amount":     amount,
-			"vegaPubKey": vegaPubKey,
-		}).Debug("Staking asset")
+	s.log.With(
+		logging.String("token", name),
+		logging.String("amount", amount.String()),
+		logging.String("vegaPubKey", vegaPubKey),
+	).Debug("Staking asset")
 
 	if _, err = bridge.Stake(amount, vegaPubKeyByte32); err != nil {
 		return fmt.Errorf("failed to stake asset: %w", err)
 	}
 
-	s.log.WithFields(
-		log.Fields{
-			"token":      name,
-			"amount":     amount,
-			"vegaPubKey": vegaPubKey,
-		}).Debug("Token staked")
+	s.log.With(
+		logging.String("token", name),
+		logging.String("amount", amount.String()),
+		logging.String("vegaPubKey", vegaPubKey),
+	).Debug("Token staked")
 
 	return nil
 }

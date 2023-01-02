@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"code.vegaprotocol.io/shared/libs/erc20/config"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 func TestService_mintToken(t *testing.T) {
@@ -17,12 +18,11 @@ func TestService_mintToken(t *testing.T) {
 	conf := &config.TokenConfig{
 		EthereumAPIAddress: "wss://ropsten.infura.io/ws/v3/0b0e1795edae41f59f4c99d29ba0ae8e",
 	}
-	pubKey := "0x0"
 	privKey := ""
 	tokenAddr := common.HexToAddress("0x3773A5c7aFF77e014cBF067dd31801b4C6dc4136")
 	toAddress := common.HexToAddress("0xb89A165EA8b619c14312dB316BaAa80D2a98B493")
 
-	s, err := NewService(conf, pubKey)
+	s, err := NewService(logging.NewTestLogger(), conf)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	log "github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/shared/libs/whale/config"
+	"code.vegaprotocol.io/vega/logging"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 )
@@ -29,7 +29,7 @@ type Provider struct {
 	mu               sync.Mutex
 	topUpChan        chan types.TopUpRequest
 	callTimeout      time.Duration
-	log              *log.Entry
+	log              *logging.Logger
 }
 
 type slacker struct {
@@ -44,6 +44,7 @@ type pendingDeposit struct {
 }
 
 func NewProvider(
+	log *logging.Logger,
 	node dataNode,
 	erc20 erc20Service,
 	faucet faucetClient,
@@ -63,10 +64,7 @@ func NewProvider(
 			channelID: config.SlackConfig.ChannelID,
 			enabled:   config.SlackConfig.Enabled,
 		},
-		log: log.WithFields(log.Fields{
-			"component": "WhaleProvider",
-			"whaleName": config.Wallet.Name,
-		}),
+		log: log.Named("WhaleProvider"),
 	}
 
 	go func() {
@@ -101,9 +99,10 @@ func (p *Provider) handleTopUp(ctx context.Context, receiverName, receiverAddres
 		return nil
 	}
 
-	p.log.WithFields(
-		log.Fields{"receiverName": receiverName, "receiverAddress": receiverAddress}).
-		Warningf("Failed to deposit: %s", err)
+	p.log.With(
+		logging.String("receiverName", receiverName),
+		logging.String("receiverAddress", receiverAddress),
+	).Warningf("Failed to deposit: %s", err)
 
 	deposit := pendingDeposit{
 		amount: amount,
@@ -115,11 +114,11 @@ func (p *Provider) handleTopUp(ctx context.Context, receiverName, receiverAddres
 		return fmt.Errorf("failed to deposit: %w", err)
 	}
 
-	p.log.Debugf("Fallback to slacking Dan...")
+	p.log.Debug("Fallback to slacking Dan...")
 
 	deposit.timestamp, err = p.slackDan(ctx, assetID, receiverAddress, amount)
 	if err != nil {
-		p.log.Errorf("Failed to slack Dan: %s", err)
+		p.log.Error("Failed to slack Dan", logging.Error(err))
 		return err
 	}
 	p.setPendingDeposit(assetID, deposit)
@@ -272,7 +271,11 @@ func addressFromPrivateKey(privateKey string) (string, error) {
 const msgTemplate = `Hi @here! Whale wallet account with pub key %s needs %s coins of assetID %s, so that it can feed the hungry bots.`
 
 func (p *Provider) slackDan(ctx context.Context, assetID, walletPubKey string, amount *num.Uint) (string, error) {
-	p.log.Debugf("Slack post @hungry-bots: wallet pub key: %s; asset id: %s; amount: %s", walletPubKey, assetID, amount.String())
+	p.log.With(
+		logging.String("assetID", assetID),
+		logging.String("walletPubKey", walletPubKey),
+		logging.String("amount", amount.String()),
+	).Debug("Slack post @hungry-bots")
 
 	message := fmt.Sprintf(msgTemplate, walletPubKey, amount.String(), assetID)
 
@@ -285,7 +288,10 @@ func (p *Provider) slackDan(ctx context.Context, assetID, walletPubKey string, a
 		return "", err
 	}
 
-	p.log.Debugf("Slack message successfully sent to channel %s at %s", respChannel, respTimestamp)
+	p.log.With(
+		logging.String("channel", respChannel),
+		logging.String("timestamp", respTimestamp),
+	).Debug("Slack message successfully sent")
 
 	time.Sleep(time.Second * 5)
 
@@ -298,7 +304,11 @@ func (p *Provider) slackDan(ctx context.Context, assetID, walletPubKey string, a
 }
 
 func (p *Provider) updateDan(ctx context.Context, assetID, walletPubKey, oldTimestamp string, amount *num.Uint) (string, error) {
-	p.log.Debugf("Slack update @hungry-bots: wallet pub key: %s; asset id: %s; amount: %s", walletPubKey, assetID, amount.String())
+	p.log.With(
+		logging.String("assetID", assetID),
+		logging.String("walletPubKey", walletPubKey),
+		logging.String("amount", amount.String()),
+	).Debug("Slack update @hungry-bots")
 
 	message := fmt.Sprintf(msgTemplate, walletPubKey, amount.String(), assetID)
 
@@ -312,6 +322,9 @@ func (p *Provider) updateDan(ctx context.Context, assetID, walletPubKey, oldTime
 		return "", err
 	}
 
-	p.log.Debugf("Slack message successfully updated in channel %s at %s", respChannel, respTimestamp)
+	p.log.With(
+		logging.String("channel", respChannel),
+		logging.String("timestamp", respTimestamp),
+	).Debug("Slack message successfully updated ")
 	return respTimestamp, nil
 }

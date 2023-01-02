@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/jsonpb"
-	"go.uber.org/zap"
 
 	"code.vegaprotocol.io/vega/libs/jsonrpc"
+	"code.vegaprotocol.io/vega/logging"
 	"code.vegaprotocol.io/vega/paths"
 	commandspb "code.vegaprotocol.io/vega/protos/vega/commands/v1"
 	walletpb "code.vegaprotocol.io/vega/protos/vega/wallet/v1"
@@ -31,6 +31,7 @@ type WalletV2Service struct {
 
 	walletStore  api.WalletStore
 	networkStore api.NetworkStore
+	log          *logging.Logger
 
 	apiCreateWallet    jsonrpc.Command
 	apiDescribeWallet  jsonrpc.Command
@@ -45,7 +46,7 @@ type WalletV2 interface {
 	SendJSONTransaction(ctx context.Context, txJsn string) (*commandspb.Transaction, error)
 }
 
-func NewWalletV2Service(config *Config) (*WalletV2Service, error) {
+func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, error) {
 	if config == nil {
 		return nil, errors.New("config is nil")
 	}
@@ -72,12 +73,12 @@ func NewWalletV2Service(config *Config) (*WalletV2Service, error) {
 	nodeSelectorBuilder := func(hosts []string, retries uint64) (node.Selector, error) {
 		nodes := make([]node.Node, len(hosts))
 		for i, host := range hosts {
-			nodes[i], err = node.NewRetryingNode(zap.L(), host, retries)
+			nodes[i], err = node.NewRetryingNode(log.Logger, host, retries)
 			if err != nil {
 				return nil, fmt.Errorf("couldn't initialise retrying node: %w", err)
 			}
 		}
-		return node.NewRoundRobinSelector(zap.L(), nodes...)
+		return node.NewRoundRobinSelector(log.Logger, nodes...)
 	}
 
 	w := &WalletV2Service{
@@ -89,6 +90,7 @@ func NewWalletV2Service(config *Config) (*WalletV2Service, error) {
 		nodeAddress:    config.NodeURL,
 		pubKey:         config.PubKey,
 		numRetries:     10,
+		log:            log.Named("Wallet"),
 
 		apiCreateWallet:    api.NewAdminCreateWallet(walletStore),
 		apiDescribeWallet:  api.NewAdminDescribeWallet(walletStore),
@@ -123,37 +125,6 @@ func NewWalletV2Service(config *Config) (*WalletV2Service, error) {
 
 func (w *WalletV2Service) PublicKey() string {
 	return w.pubKey
-}
-
-func (w *WalletV2Service) setupWallet(ctx context.Context) error {
-	_, err := w.describeWallet(ctx)
-	if err != nil {
-		if err.Error() == api.ErrWalletDoesNotExist.Error() {
-			createResp, err := w.createWallet(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to create wallet: %w", err)
-			}
-			zap.L().Debug("Created wallet",
-				zap.String("pubKey", createResp.Key.PublicKey),
-				zap.String("wallet", w.walletName),
-				zap.String("recoveryPhrase", createResp.Wallet.RecoveryPhrase))
-		} else {
-			return fmt.Errorf("failed to describe wallet: %w", err)
-		}
-	} else {
-		keysResp, err := w.listKeys(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to list keys: %w", err)
-		}
-		if len(keysResp.PublicKeys) == 0 {
-			_, err = w.generateKey(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to generate key: %w", err)
-			}
-		}
-	}
-
-	return nil
 }
 
 func (w *WalletV2Service) SendTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error) {
@@ -194,6 +165,37 @@ func (w *WalletV2Service) SendJSONTransaction(ctx context.Context, payload strin
 		return nil, errors.New(errDetails.Data)
 	}
 	return rawResult.(api.AdminSendTransactionResult).Tx, nil
+}
+
+func (w *WalletV2Service) setupWallet(ctx context.Context) error {
+	_, err := w.describeWallet(ctx)
+	if err != nil {
+		if err.Error() == api.ErrWalletDoesNotExist.Error() {
+			createResp, err := w.createWallet(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to create wallet: %w", err)
+			}
+			w.log.Debug("Created wallet",
+				logging.String("pubKey", createResp.Key.PublicKey),
+				logging.String("wallet", w.walletName),
+				logging.String("recoveryPhrase", createResp.Wallet.RecoveryPhrase))
+		} else {
+			return fmt.Errorf("failed to describe wallet: %w", err)
+		}
+	} else {
+		keysResp, err := w.listKeys(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list keys: %w", err)
+		}
+		if len(keysResp.PublicKeys) == 0 {
+			_, err = w.generateKey(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to generate key: %w", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (w *WalletV2Service) createWallet(ctx context.Context) (api.AdminCreateWalletResult, error) {

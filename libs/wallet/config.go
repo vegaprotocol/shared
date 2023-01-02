@@ -4,8 +4,8 @@ package wallet
 type Config struct {
 	Name           string `yaml:"name"`
 	Passphrase     string `yaml:"passphrase"`
-	PubKey         string `yaml:"pubKey"`
+	PubKey         string `yaml:"pubKey"` // optional
 	StorePath      string `yaml:"storePath"`
-	NetworkFileURL string `yaml:"networkFileURL"`
-	NodeURL        string `yaml:"nodeURL"`
+	NetworkFileURL string `yaml:"networkFileURL"` // either this or
+	NodeURL        string `yaml:"nodeURL"`        // that is required
 }

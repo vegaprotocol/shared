@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"math"
 
-	log "github.com/sirupsen/logrus"
-
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/types"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 type Service struct {
@@ -19,10 +18,10 @@ type Service struct {
 	stores        map[string]balanceStore
 	accountStream accountStream
 	coinProvider  CoinProvider
-	log           *log.Entry
+	log           *logging.Logger
 }
 
-func NewService(name, pubKey, assetID string, accountStream accountStream, coinProvider CoinProvider) *Service {
+func NewService(log *logging.Logger, name, pubKey, assetID string, accountStream accountStream, coinProvider CoinProvider) *Service {
 	return &Service{
 		name:          name,
 		pubKey:        pubKey,
@@ -30,7 +29,7 @@ func NewService(name, pubKey, assetID string, accountStream accountStream, coinP
 		stores:        make(map[string]balanceStore),
 		accountStream: accountStream,
 		coinProvider:  coinProvider,
-		log:           log.WithField("component", "AccountService"),
+		log:           log.Named("AccountService"),
 	}
 }
 
@@ -59,15 +58,14 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 		askAmount = askAmount.Div(askAmount, num.NewUint(uint64(math.Pow10(int(dpDiff)))))
 	}
 
-	a.log.WithFields(
-		log.Fields{
-			"name":         a.name,
-			"partyId":      a.pubKey,
-			"asset":        assetID,
-			"balance":      balance.String(),
-			"targetAmount": targetAmount.String(),
-			"askAmount":    askAmount.String(),
-		}).Debugf("%s: Account balance is less than target amount, depositing...", from)
+	a.log.With(
+		logging.String("name", a.name),
+		logging.String("partyId", a.pubKey),
+		logging.String("asset", assetID),
+		logging.String("balance", balance.String()),
+		logging.String("targetAmount", targetAmount.String()),
+		logging.String("askAmount", askAmount.String()),
+	).Debugf("%s: Account balance is less than target amount, depositing...", from)
 
 	errCh := make(chan error)
 
@@ -101,15 +99,14 @@ func (a *Service) EnsureStake(ctx context.Context, receiverName, receiverPubKey,
 		return nil
 	}
 
-	a.log.WithFields(
-		log.Fields{
-			"name":           a.name,
-			"receiverName":   receiverName,
-			"receiverPubKey": receiverPubKey,
-			"partyId":        a.pubKey,
-			"stake":          stake.String(),
-			"targetAmount":   targetAmount.String(),
-		}).Debugf("%s: Account Stake balance is less than target amount, staking...", from)
+	a.log.With(
+		logging.String("name", a.name),
+		logging.String("receiverName", receiverName),
+		logging.String("receiverPubKey", receiverPubKey),
+		logging.String("partyId", a.pubKey),
+		logging.String("stake", stake.String()),
+		logging.String("targetAmount", targetAmount.String()),
+	).Debugf("%s: Account Stake balance is less than target amount, staking...", from)
 
 	if err = a.coinProvider.Stake(ctx, receiverName, receiverPubKey, assetID, targetAmount, from); err != nil {
 		return fmt.Errorf("failed to stake: %w", err)
@@ -125,7 +122,7 @@ func (a *Service) Stake(ctx context.Context, receiverName, receiverPubKey, asset
 func (a *Service) Balance(ctx context.Context) cache.Balance {
 	store, err := a.getStore(ctx, a.assetID)
 	if err != nil {
-		a.log.WithError(err).Error("failed to get balance store")
+		a.log.Error("failed to get balance store", logging.Error(err))
 		return cache.Balance{}
 	}
 	return store.Balance()

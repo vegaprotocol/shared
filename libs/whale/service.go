@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 
 	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
@@ -14,6 +13,7 @@ import (
 	"code.vegaprotocol.io/shared/libs/wallet"
 	"code.vegaprotocol.io/shared/libs/whale/config"
 	vtypes "code.vegaprotocol.io/vega/core/types"
+	"code.vegaprotocol.io/vega/logging"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commV1 "code.vegaprotocol.io/vega/protos/vega/commands/v1"
@@ -29,10 +29,11 @@ type Service struct {
 
 	topUpChan    chan types.TopUpRequest
 	walletConfig *config.WhaleConfig
-	log          *log.Entry
+	log          *logging.Logger
 }
 
 func NewService(
+	log *logging.Logger,
 	dataNode dataNode,
 	wallet wallet.WalletV2,
 	account accountService,
@@ -49,10 +50,7 @@ func NewService(
 		account:       account,
 		accountStream: accountStream,
 		walletConfig:  config,
-		log: log.WithFields(log.Fields{
-			"component": "Whale",
-			"name":      config.Wallet.Name,
-		}),
+		log:           log.Named("Whale"),
 	}
 	go func() {
 		for req := range w.topUpChan {
@@ -75,7 +73,7 @@ func (w *Service) TopUpChan() chan types.TopUpRequest {
 }
 
 func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint, from string) error {
-	w.log.Debugf("Top up for '%s' ...", receiverName)
+	w.log.With(logging.String("receiverName", receiverName)).Debug("Top up...")
 
 	if assetID == "" {
 		return fmt.Errorf("assetID is empty for bot '%s'", receiverName)
@@ -89,20 +87,19 @@ func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress
 		return fmt.Errorf("failed to top up: %w", err)
 	}
 
-	w.log.WithFields(
-		log.Fields{
-			"receiverName":   receiverName,
-			"receiverPubKey": receiverAddress,
-			"assetID":        assetID,
-			"amount":         amount.String(),
-		}).Debugf("Top-up sent")
+	w.log.With(
+		logging.String("receiverName", receiverName),
+		logging.String("receiverPubKey", receiverAddress),
+		logging.AssetID(assetID),
+		logging.String("amount", amount.String()),
+	).Debug("Top-up sent")
 
-	w.log.WithFields(log.Fields{"name": receiverName}).Debugf("%s: Waiting for top-up...", from)
+	w.log.With(logging.String("name", receiverName)).Debugf("%s: Waiting for top-up...", from)
 
 	if err := w.accountStream.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
 		return fmt.Errorf("failed to wait for top-up to finalise: %w", err)
 	}
-	w.log.WithFields(log.Fields{"name": receiverName}).Debugf("%s: Top-up complete", from)
+	w.log.With(logging.String("name", receiverName)).Debugf("%s: Top-up complete", from)
 
 	return nil
 }
@@ -178,24 +175,27 @@ func (w *Service) depositBuiltin(ctx context.Context, assetID, pubKey string, am
 		totalMinted.Add(totalMinted, maxFaucet)
 
 		time.Sleep(w.walletConfig.FaucetRateLimit)
-		w.log.Infof("Minted %s out of %s for %s", totalMinted, amount, assetID)
+		w.log.With(
+			logging.AssetID(assetID),
+			logging.PartyID(pubKey),
+		).Infof("Minted %s out of %s for %s", totalMinted, amount, assetID)
 	}
 
 	return nil
 }
 
 func (w *Service) Stake(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint, from string) error {
-	w.log.Debugf("Staking for '%s' ...", receiverAddress)
+	w.log.With(logging.String("receiverAddress", receiverAddress)).Debug("Staking...")
 
 	if err := w.account.Stake(ctx, receiverName, receiverAddress, assetID, amount, from); err != nil {
 		return fmt.Errorf("failed to stake: %w", err)
 	}
 
-	w.log.WithFields(log.Fields{
-		"receiverName":   receiverName,
-		"receiverPubKey": receiverAddress,
-		"targetAmount":   amount.String(),
-	}).Debugf("%s: Waiting for staking...", from)
+	w.log.With(
+		logging.String("receiverName", receiverName),
+		logging.String("receiverPubKey", receiverAddress),
+		logging.String("targetAmount", amount.String()),
+	).Debugf("%s: Waiting for staking...", from)
 
 	if err := w.accountStream.WaitForStakeLinkingToFinalise(ctx, receiverAddress); err != nil {
 		return fmt.Errorf("failed to finalise stake: %w", err)

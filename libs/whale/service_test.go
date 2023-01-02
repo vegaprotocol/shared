@@ -16,6 +16,7 @@ import (
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/wallet"
 	"code.vegaprotocol.io/shared/libs/whale/config"
+	"code.vegaprotocol.io/vega/logging"
 )
 
 func TestService_TopUp(t *testing.T) {
@@ -29,6 +30,8 @@ func TestService_TopUp(t *testing.T) {
 	dk := map[string]string{
 		"993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede": "a37f4c2a678aefb5037bf415a826df1540b330b7e471aa54184877ba901b9ef0",
 	}
+	log := logging.NewTestLogger()
+
 	conf := &config.WhaleConfig{
 		Wallet: &wallet.Config{
 			Name:           wName,
@@ -40,14 +43,16 @@ func TestService_TopUp(t *testing.T) {
 		OwnerPrivateKeys: dk,
 		SyncTimeoutSec:   100,
 	}
-	wc, err := wallet.NewWalletV2Service(conf.Wallet)
+	wc, err := wallet.NewWalletV2Service(log, conf.Wallet)
 	require.NoError(t, err)
-	es, err := erc20.NewService(&sconfig.TokenConfig{
-		EthereumAPIAddress:   "ws://127.0.0.1:8545",
-		Erc20BridgeAddress:   "0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54",
-		StakingBridgeAddress: "0x9135f5afd6F055e731bca2348429482eE614CFfA",
-		SyncTimeoutSec:       100,
-	})
+	es, err := erc20.NewService(
+		log,
+		&sconfig.TokenConfig{
+			EthereumAPIAddress:   "ws://127.0.0.1:8545",
+			Erc20BridgeAddress:   "0x9708FF7510D4A7B9541e1699d15b53Ecb1AFDc54",
+			StakingBridgeAddress: "0x9135f5afd6F055e731bca2348429482eE614CFfA",
+			SyncTimeoutSec:       100,
+		})
 	if err != nil {
 		t.Errorf("could not create erc20 service = %s", err)
 		return
@@ -60,10 +65,10 @@ func TestService_TopUp(t *testing.T) {
 	}
 
 	fc := faucet.New(*addr)
-	ast := account.NewStream(wName, dn, nil)
-	cp := NewProvider(dn, es, fc, ast, conf)
-	as := account.NewService("test", wKey, "asset", ast, cp)
-	s := NewService(dn, wc, as, ast, fc, conf)
+	ast := account.NewStream(log, wName, dn, nil)
+	cp := NewProvider(log, dn, es, fc, ast, conf)
+	as := account.NewService(log, "test", wKey, "asset", ast, cp)
+	s := NewService(log, dn, wc, as, ast, fc, conf)
 	ctx := context.Background()
 	key := "69f684c78deefa27fd216ba771e4ca08085dea8e2b1dafd2c62352dda1e89073"
 	asset := "993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede"
