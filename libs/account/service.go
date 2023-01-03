@@ -53,9 +53,10 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 		return fmt.Errorf("failed to get asset by id: %w", err)
 	}
 
+	// if asset decimal places is higher than market decimal places, we need to scale up the amount by the difference
 	if assetDP := asset.Details.Decimals; dp > 0 && assetDP > dp {
 		dpDiff := assetDP - dp
-		askAmount = askAmount.Div(askAmount, num.NewUint(uint64(math.Pow10(int(dpDiff)))))
+		askAmount = num.Zero().Mul(askAmount, num.NewUint(uint64(math.Pow10(int(dpDiff)))))
 	}
 
 	a.log.With(
@@ -67,6 +68,14 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 		logging.String("askAmount", askAmount.String()),
 	).Debugf("%s: Account balance is less than target amount, depositing...", from)
 
+	if err = a.topUp(ctx, assetID, askAmount); err != nil {
+		return fmt.Errorf("failed to top up: %w", err)
+	}
+
+	return nil
+}
+
+func (a *Service) topUp(ctx context.Context, assetID string, askAmount *num.Uint) error {
 	errCh := make(chan error)
 
 	a.coinProvider.TopUpChan() <- types.TopUpRequest{
@@ -78,10 +87,9 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 		ErrResp:         errCh,
 	}
 
-	if err = <-errCh; err != nil {
+	if err := <-errCh; err != nil {
 		return fmt.Errorf("failed to deposit: %w", err)
 	}
-
 	return nil
 }
 
