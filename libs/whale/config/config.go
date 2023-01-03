@@ -9,6 +9,7 @@ import (
 type WhaleConfig struct {
 	Wallet           *wallet.Config    `yaml:"wallet"`
 	OwnerPrivateKeys map[string]string `yaml:"ownerPrivateKeys"`
+	TopUpScale       uint64            `yaml:"topUpScale"`
 	FaucetURL        string            `yaml:"faucetURL"`
 	FaucetRateLimit  time.Duration     `yaml:"faucetRateLimit"`
 	SyncTimeoutSec   int               `yaml:"syncTimeoutSec"`

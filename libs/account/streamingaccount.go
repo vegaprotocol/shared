@@ -23,7 +23,7 @@ type account struct {
 	name          string
 	log           *logging.Logger
 	node          dataNode
-	balanceStores *balanceStores
+	balanceStores map[string]*balanceStores // pubKey: balanceStore
 	busEvProc     busEventer
 
 	mu              sync.Mutex
@@ -37,15 +37,24 @@ func NewStream(log *logging.Logger, name string, node dataNode, pauseCh chan typ
 		node:            node,
 		waitingDeposits: make(map[string]*num.Uint),
 		busEvProc:       events.NewBusEventProcessor(log, node, events.WithPauseCh(pauseCh)),
-		balanceStores: &balanceStores{
-			balanceStores: make(map[string]balanceStore),
-		},
+		balanceStores:   make(map[string]*balanceStores),
 	}
 }
 
 func (a *account) GetBalances(ctx context.Context, assetID string, pubKey string) (balanceStore, error) {
-	if store, ok := a.balanceStores.get(assetID); ok {
-		return store, nil
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	stores, okAcc := a.balanceStores[pubKey]
+	if !okAcc {
+		stores = &balanceStores{
+			balanceStores: make(map[string]balanceStore),
+		}
+		a.balanceStores[pubKey] = stores
+	} else {
+		store, okAss := stores.get(assetID)
+		if okAss {
+			return store, nil
+		}
 	}
 
 	accounts, err := a.node.PartyAccounts(ctx, &dataapipb.ListAccountsRequest{
@@ -59,7 +68,8 @@ func (a *account) GetBalances(ctx context.Context, assetID string, pubKey string
 	}
 
 	store := cache.NewBalanceStore()
-	a.balanceStores.set(assetID, store)
+	stores.set(assetID, store)
+	a.balanceStores[pubKey] = stores
 
 	for _, acc := range accounts {
 		if err = a.setBalanceByType(acc.Type, acc.Balance, store); err != nil {
@@ -139,7 +149,7 @@ func (a *account) AssetByID(ctx context.Context, assetID string) (*vega.Asset, e
 // WaitForTopUpToFinalise is a blocking call that waits for the top-up finalise event to be received.
 func (a *account) WaitForTopUpToFinalise(
 	ctx context.Context,
-	pubKey,
+	receiverPubKey,
 	assetID string,
 	expectAmount *num.Uint,
 	timeout time.Duration,
@@ -157,7 +167,7 @@ func (a *account) WaitForTopUpToFinalise(
 			eventspb.BusEventType_BUS_EVENT_TYPE_TRANSFER,
 			eventspb.BusEventType_BUS_EVENT_TYPE_ACCOUNT,
 		},
-		// PartyId: pubKey, TODO: ??
+		// PartyId: receiverPubKey, TODO: ??
 		// AssetId: assetID, TODO: ??
 	}
 
@@ -165,9 +175,12 @@ func (a *account) WaitForTopUpToFinalise(
 		for _, event := range rsp.Events {
 			var (
 				status   string
+				reason   string
 				partyId  string
 				asset    string
 				balance  string
+				from     string
+				amount   string
 				okStatus []string
 			)
 			switch event.Type {
@@ -176,15 +189,21 @@ func (a *account) WaitForTopUpToFinalise(
 				status = depEvt.Status.String()
 				partyId = depEvt.PartyId
 				asset = depEvt.Asset
+				amount = depEvt.Amount
 				okStatus = []string{
 					vega.Deposit_STATUS_FINALIZED.String(),
 					vega.Deposit_STATUS_OPEN.String(),
 				}
 			case eventspb.BusEventType_BUS_EVENT_TYPE_TRANSFER:
-				depEvt := event.GetTransfer()
-				status = depEvt.Status.String()
-				partyId = depEvt.To
-				asset = depEvt.Asset
+				trfEvt := event.GetTransfer()
+				status = trfEvt.Status.String()
+				if trfEvt.Reason != nil {
+					reason = *trfEvt.Reason
+				}
+				from = trfEvt.From
+				partyId = trfEvt.To
+				asset = trfEvt.Asset
+				amount = trfEvt.Amount
 				okStatus = []string{
 					eventspb.Transfer_STATUS_DONE.String(),
 					eventspb.Transfer_STATUS_PENDING.String(),
@@ -200,13 +219,34 @@ func (a *account) WaitForTopUpToFinalise(
 			}
 
 			// filter out any that are for different assets, or not finalized
-			if partyId != pubKey || asset != assetID {
+			if partyId != receiverPubKey || asset != assetID {
 				continue
 			}
 
 			// if it's a deposit or transfer event, check if it failed
 			if status != "" && !slices.Contains(okStatus, status) {
-				return true, fmt.Errorf("transfer %s failed: %s", event.Id, status)
+				genBalance := ""
+				nodeBalance := ""
+
+				if from != "" {
+					balances, ok := a.balanceStores[from].get(assetID)
+					if ok {
+						genBalance = cache.General(balances.Balance()).String()
+					}
+				}
+				a.log.With(
+					logging.String("status", status),
+					logging.String("reason", reason),
+					logging.String("partyId", partyId),
+					logging.String("from", from),
+					logging.String("asset", asset),
+					logging.String("balance", balance),
+					logging.String("amount", amount),
+					logging.String("expectAmount", expectAmount.String()),
+					logging.String("balance.general", genBalance),
+					logging.String("balance.node", nodeBalance),
+				).Error("deposit or transfer failed")
+				return true, fmt.Errorf("transfer %s failed: %s: %s", event.Id, status, reason)
 			}
 
 			// only check the deposited amount for account events
@@ -221,7 +261,7 @@ func (a *account) WaitForTopUpToFinalise(
 
 			gotAmount, err := num.ConvertUint256(balance)
 			if err != nil {
-				return false, fmt.Errorf("failed to parse top-up expectAmount %s: %w", balance, err)
+				return false, fmt.Errorf("failed to parse top-up expectAmount %s: %w", expectAmount.String(), err)
 			}
 
 			expect, ok := a.getWaitingDeposit(assetID)
@@ -233,18 +273,18 @@ func (a *account) WaitForTopUpToFinalise(
 			if gotAmount.GTE(expect) {
 				a.log.With(
 					logging.String("name", a.name),
-					logging.String("partyId", pubKey),
+					logging.String("partyId", receiverPubKey),
 					logging.String("balance", gotAmount.String()),
 				).Info("TopUp finalised")
 				a.deleteWaitingDeposit(assetID)
-				if _, err = a.GetBalances(ctx, assetID, pubKey); err != nil {
+				if _, err = a.GetBalances(ctx, assetID, receiverPubKey); err != nil {
 					a.log.Error("failed to set balance after top-up", logging.Error(err))
 				}
 				return true, nil
 			} else if !gotAmount.IsZero() {
 				a.log.With(
 					logging.String("name", a.name),
-					logging.String("partyId", pubKey),
+					logging.String("partyId", receiverPubKey),
 					logging.String("gotAmount", gotAmount.String()),
 					logging.String("targetAmount", expect.String()),
 				).Info("Received funds, but balance is less than expected")

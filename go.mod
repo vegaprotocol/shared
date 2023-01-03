@@ -3,7 +3,7 @@ module code.vegaprotocol.io/shared
 go 1.19
 
 require (
-	code.vegaprotocol.io/vega v0.63.2-0.20221207161357-3780ca754bc6
+	code.vegaprotocol.io/vega v0.65.1
 	github.com/BurntSushi/toml v1.2.1
 	github.com/adrg/xdg v0.4.0
 	github.com/blang/semver/v4 v4.0.0
@@ -76,4 +76,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/shopspring/decimal => github.com/vegaprotocol/decimal v1.2.1-0.20210705145732-aaa563729a0a
+replace github.com/shopspring/decimal => github.com/vegaprotocol/decimal v1.3.1-uint256

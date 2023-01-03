@@ -47,10 +47,15 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 		return nil
 	}
 
-	askAmount := num.Zero().Mul(targetAmount, num.NewUint(scale))
 	asset, err := a.accountStream.AssetByID(ctx, assetID)
 	if err != nil {
 		return fmt.Errorf("failed to get asset by id: %w", err)
+	}
+
+	askAmount := targetAmount.Clone()
+
+	if scale > 1 {
+		askAmount = num.Zero().Mul(targetAmount, num.NewUint(scale))
 	}
 
 	// if asset decimal places is higher than market decimal places, we need to scale up the amount by the difference

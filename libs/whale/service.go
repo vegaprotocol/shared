@@ -27,9 +27,9 @@ type Service struct {
 	accountStream types.AccountStream
 	faucet        faucetClient
 
-	topUpChan    chan types.TopUpRequest
-	walletConfig *config.WhaleConfig
-	log          *logging.Logger
+	topUpChan chan types.TopUpRequest
+	config    *config.WhaleConfig
+	log       *logging.Logger
 }
 
 func NewService(
@@ -49,7 +49,7 @@ func NewService(
 		topUpChan:     make(chan types.TopUpRequest),
 		account:       account,
 		accountStream: accountStream,
-		walletConfig:  config,
+		config:        config,
 		log:           log.Named("Whale"),
 	}
 	go func() {
@@ -122,7 +122,7 @@ func (w *Service) topUp(ctx context.Context, receiverName string, receiverAddres
 	}
 
 	// dp is 0 because the amount had already been corrected for the DP
-	if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, 0, 100, from+">receiverNameWhale"); err != nil {
+	if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, 0, w.config.TopUpScale, from+">receiverNameWhale"); err != nil {
 		return fmt.Errorf("failed to ensure enough funds: %w", err)
 	}
 
@@ -174,7 +174,7 @@ func (w *Service) depositBuiltin(ctx context.Context, assetID, pubKey string, am
 
 		totalMinted.Add(totalMinted, maxFaucet)
 
-		time.Sleep(w.walletConfig.FaucetRateLimit)
+		time.Sleep(w.config.FaucetRateLimit)
 		w.log.With(
 			logging.AssetID(assetID),
 			logging.PartyID(pubKey),
