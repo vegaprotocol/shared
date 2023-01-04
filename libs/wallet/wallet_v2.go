@@ -43,8 +43,10 @@ type WalletV2Service struct {
 
 type WalletV2 interface {
 	PublicKey() string
+	GenerateKey(ctx context.Context) (string, error)
 	SendTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error)
 	SendJSONTransaction(ctx context.Context, txJsn string) (*commandspb.Transaction, error)
+	SendJSONTransactionFrom(ctx context.Context, payload string, pubKey string) (*commandspb.Transaction, error)
 }
 
 func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, error) {
@@ -137,10 +139,14 @@ func (w *WalletV2Service) SendTransaction(ctx context.Context, tx *walletpb.Subm
 	if err != nil {
 		return nil, fmt.Errorf("couldn't marshal transaction: %w", err)
 	}
-	return w.SendJSONTransaction(ctx, jsn)
+	return w.SendJSONTransactionFrom(ctx, jsn, tx.PubKey)
 }
 
 func (w *WalletV2Service) SendJSONTransaction(ctx context.Context, payload string) (*commandspb.Transaction, error) {
+	return w.SendJSONTransactionFrom(ctx, payload, w.pubKey)
+}
+
+func (w *WalletV2Service) SendJSONTransactionFrom(ctx context.Context, payload string, pubKey string) (*commandspb.Transaction, error) {
 	txPayload := make(map[string]any)
 	if err := json.Unmarshal([]byte(payload), &txPayload); err != nil {
 		return nil, fmt.Errorf("couldn't unmarshal transaction payload: %w", err)
@@ -149,7 +155,7 @@ func (w *WalletV2Service) SendJSONTransaction(ctx context.Context, payload strin
 	params := api.AdminSendTransactionParams{
 		Wallet:      w.walletName,
 		Passphrase:  w.passphrase,
-		PublicKey:   w.pubKey,
+		PublicKey:   pubKey,
 		Retries:     w.numRetries,
 		SendingMode: "sync",
 		Transaction: txPayload,
@@ -168,6 +174,15 @@ func (w *WalletV2Service) SendJSONTransaction(ctx context.Context, payload strin
 	return rawResult.(api.AdminSendTransactionResult).Tx, nil
 }
 
+// GenerateKey generates a new keypair
+func (w *WalletV2Service) GenerateKey(ctx context.Context) (string, error) {
+	keyResp, err := w.generateKey(ctx)
+	if err != nil {
+		return "", fmt.Errorf("couldn't generate key: %w", err)
+	}
+	return keyResp.PublicKey, nil
+}
+
 func (w *WalletV2Service) setupWallet(ctx context.Context) error {
 	_, err := w.describeWallet(ctx)
 	if err != nil {
@@ -176,8 +191,9 @@ func (w *WalletV2Service) setupWallet(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to create wallet: %w", err)
 			}
+			w.pubKey = createResp.Key.PublicKey
 			w.log.Debug("Created wallet",
-				logging.String("pubKey", createResp.Key.PublicKey),
+				logging.String("pubKey", w.pubKey),
 				logging.String("wallet", w.walletName),
 				logging.String("recoveryPhrase", createResp.Wallet.RecoveryPhrase))
 		} else {
@@ -188,11 +204,14 @@ func (w *WalletV2Service) setupWallet(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to list keys: %w", err)
 		}
-		if len(keysResp.PublicKeys) == 0 {
-			_, err = w.generateKey(ctx)
+		if len(keysResp.PublicKeys) > 0 {
+			w.pubKey = keysResp.PublicKeys[0].PublicKey
+		} else {
+			keyResp, err := w.generateKey(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to generate key: %w", err)
 			}
+			w.pubKey = keyResp.PublicKey
 		}
 	}
 
@@ -211,7 +230,6 @@ func (w *WalletV2Service) createWallet(ctx context.Context) (api.AdminCreateWall
 	}
 
 	result := rawResult.(api.AdminCreateWalletResult)
-	w.pubKey = result.Key.PublicKey
 	return result, nil
 }
 
@@ -260,6 +278,5 @@ func (w *WalletV2Service) generateKey(ctx context.Context) (api.AdminGenerateKey
 	}
 
 	result := rawResult.(api.AdminGenerateKeyResult)
-	w.pubKey = result.PublicKey
 	return result, nil
 }
