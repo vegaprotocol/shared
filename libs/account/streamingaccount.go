@@ -226,8 +226,6 @@ func (a *account) WaitForTopUpToFinalise(
 			// if it's a deposit or transfer event, check if it failed
 			if status != "" && !slices.Contains(okStatus, status) {
 				genBalance := ""
-				nodeBalance := ""
-
 				if from != "" {
 					balances, ok := a.balanceStores[from].get(assetID)
 					if ok {
@@ -244,7 +242,6 @@ func (a *account) WaitForTopUpToFinalise(
 					logging.String("amount", amount),
 					logging.String("expectAmount", expectAmount.String()),
 					logging.String("balance.general", genBalance),
-					logging.String("balance.node", nodeBalance),
 				).Error("deposit or transfer failed")
 				return true, fmt.Errorf("transfer %s failed: %s: %s", event.Id, status, reason)
 			}

@@ -112,17 +112,15 @@ func (w *Service) topUp(ctx context.Context, receiverName string, receiverAddres
 		return fmt.Errorf("failed to get asset by id: %w", err)
 	}
 
-	ensureAmount := num.Zero().Mul(amount, num.NewUint(30))
-
 	if builtin := asset.Details.GetBuiltinAsset(); builtin != nil {
-		if err := w.depositBuiltin(ctx, assetID, receiverAddress, ensureAmount, builtin); err != nil {
+		if err := w.depositBuiltin(ctx, assetID, receiverAddress, amount, builtin); err != nil {
 			return errors.Wrap(err, "failed to deposit builtin")
 		}
 		return nil
 	}
 
 	// dp is 0 because the amount had already been corrected for the DP
-	if err := w.account.EnsureBalance(ctx, assetID, cache.General, ensureAmount, 0, w.config.TopUpScale, from+">receiverNameWhale"); err != nil {
+	if err := w.account.EnsureBalance(ctx, assetID, cache.General, amount, 0, w.config.TopUpScale, from+">receiverNameWhale"); err != nil {
 		return fmt.Errorf("failed to ensure enough funds: %w", err)
 	}
 
@@ -150,6 +148,8 @@ func (w *Service) depositBuiltin(ctx context.Context, assetID, pubKey string, am
 	if err != nil {
 		return fmt.Errorf("failed to convert max faucet amount: %w", err)
 	}
+
+	amount = num.Zero().Mul(amount, num.NewUint(w.config.TopUpScale))
 
 	if maxFaucet.GT(amount) {
 		if ok, err := w.faucet.Mint(ctx, maxFaucet.String(), assetID, pubKey); err != nil {

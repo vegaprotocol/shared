@@ -87,12 +87,24 @@ func (s *Service) Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, er
 		return nil, fmt.Errorf("failed to create staking bridge: %w", err)
 	}
 
-	minted, err := s.mintToken(ctx, erc20Token, common.HexToAddress(ownerAddress), amount.BigInt())
+	balance, err := erc20Token.BalanceOf(common.HexToAddress(ownerAddress))
 	if err != nil {
-		return nil, fmt.Errorf("failed to mint erc20Token token: %w", err)
+		return nil, fmt.Errorf("failed to get balance of token: %w", err)
 	}
 
-	if err = s.approveAndDepositToken(erc20Token, vegaPubKey, erc20bridge, minted); err != nil {
+	if balance.Cmp(amount.BigInt()) <= 0 {
+		s.log.With(
+			logging.String("token", erc20TokenAddress),
+			logging.String("amount", amount.String()),
+			logging.String("balance", balance.String()),
+		).Debug("Not enough balance to deposit: minting token")
+		balance, err = s.mintToken(ctx, erc20Token, common.HexToAddress(ownerAddress), amount.BigInt())
+		if err != nil {
+			return nil, fmt.Errorf("failed to mint erc20Token token: %w", err)
+		}
+	}
+
+	if err = s.approveAndDepositToken(erc20Token, vegaPubKey, erc20bridge, amount.BigInt()); err != nil {
 		return nil, fmt.Errorf("failed to approve and deposit token on erc20 bridge: %w", err)
 	}
 
@@ -101,7 +113,7 @@ func (s *Service) Deposit(ctx context.Context, ownerPrivateKey, ownerAddress, er
 		logging.String("pubkey", vegaPubKey),
 	).Debug("Deposit request sent")
 
-	deposited, overflow := num.UintFromBig(minted)
+	deposited, overflow := num.UintFromBig(amount.BigInt())
 	if overflow {
 		return nil, fmt.Errorf("overflow when converting minted amount to uint")
 	}

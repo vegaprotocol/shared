@@ -43,25 +43,25 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 	// for liquidity increase, we need both Bond and General account balance
 	balance := balanceFn(store.Balance())
 
-	if balance.GTE(targetAmount) {
-		return nil
-	}
-
 	asset, err := a.accountStream.AssetByID(ctx, assetID)
 	if err != nil {
 		return fmt.Errorf("failed to get asset by id: %w", err)
+	}
+
+	// if asset decimal places is higher than market decimal places, we need to scale up the amount by the difference
+	if assetDP := asset.Details.Decimals; dp > 0 && assetDP > dp {
+		dpDiff := assetDP - dp
+		targetAmount = num.Zero().Mul(targetAmount, num.NewUint(uint64(math.Pow10(int(dpDiff)))))
+	}
+
+	if balance.GTE(targetAmount) {
+		return nil
 	}
 
 	askAmount := targetAmount.Clone()
 
 	if scale > 1 {
 		askAmount = num.Zero().Mul(targetAmount, num.NewUint(scale))
-	}
-
-	// if asset decimal places is higher than market decimal places, we need to scale up the amount by the difference
-	if assetDP := asset.Details.Decimals; dp > 0 && assetDP > dp {
-		dpDiff := assetDP - dp
-		askAmount = num.Zero().Mul(askAmount, num.NewUint(uint64(math.Pow10(int(dpDiff)))))
 	}
 
 	a.log.With(
