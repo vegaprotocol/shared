@@ -26,6 +26,7 @@ type WalletV2Service struct {
 	networkFileURL string
 	walletName     string
 	passphrase     string
+	recoveryPhrase string
 	pubKey         string
 	nodeAddress    string
 	numRetries     uint64
@@ -36,6 +37,7 @@ type WalletV2Service struct {
 
 	apiCreateWallet    jsonrpc.Command
 	apiDescribeWallet  jsonrpc.Command
+	apiImportWallet    jsonrpc.Command
 	apiListKeys        jsonrpc.Command
 	apiGenerateKey     jsonrpc.Command
 	apiSendTransaction jsonrpc.Command
@@ -44,6 +46,7 @@ type WalletV2Service struct {
 type WalletV2 interface {
 	PublicKey() string
 	GenerateKey(ctx context.Context) (string, error)
+	ImportWallet(ctx context.Context, overwrite bool) error
 	SendTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error)
 	SendJSONTransaction(ctx context.Context, txJsn string) (*commandspb.Transaction, error)
 	SendJSONTransactionFrom(ctx context.Context, payload string, pubKey string) (*commandspb.Transaction, error)
@@ -73,20 +76,10 @@ func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, 
 		return nil, fmt.Errorf("couldn't initialise network store: %w", err)
 	}
 
-	nodeSelectorBuilder := func(hosts []string, retries uint64) (node.Selector, error) {
-		nodes := make([]node.Node, len(hosts))
-		for i, host := range hosts {
-			nodes[i], err = node.NewRetryingNode(zap.L(), host, retries)
-			if err != nil {
-				return nil, fmt.Errorf("couldn't initialise retrying node: %w", err)
-			}
-		}
-		return node.NewRoundRobinSelector(zap.L(), nodes...)
-	}
-
 	w := &WalletV2Service{
 		walletName:     config.Name,
 		passphrase:     config.Passphrase,
+		recoveryPhrase: config.RecoveryPhrase,
 		walletStore:    walletStore,
 		networkStore:   networkStore,
 		networkFileURL: config.NetworkFileURL,
@@ -95,13 +88,17 @@ func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, 
 		numRetries:     10,
 		log:            log.Named("Wallet"),
 
-		apiCreateWallet:    api.NewAdminCreateWallet(walletStore),
-		apiDescribeWallet:  api.NewAdminDescribeWallet(walletStore),
-		apiListKeys:        api.NewAdminListKeys(walletStore),
-		apiGenerateKey:     api.NewAdminGenerateKey(walletStore),
-		apiSendTransaction: api.NewAdminSendTransaction(walletStore, networkStore, nodeSelectorBuilder),
+		apiCreateWallet:   api.NewAdminCreateWallet(walletStore),
+		apiDescribeWallet: api.NewAdminDescribeWallet(walletStore),
+		apiImportWallet:   api.NewAdminImportWallet(walletStore),
+		apiListKeys:       api.NewAdminListKeys(walletStore),
+		apiGenerateKey:    api.NewAdminGenerateKey(walletStore),
 	}
 
+	var (
+		hosts   []string
+		retries uint64
+	)
 	if w.networkFileURL != "" {
 		w.network = strings.Split(strings.Split(w.networkFileURL, ".toml")[0], "vegawallet-")[1] // hacky
 		networkImportParams := api.AdminImportNetworkParams{
@@ -113,9 +110,30 @@ func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, 
 		if errDetails != nil {
 			return nil, errors.New(errDetails.Data)
 		}
-	} else if w.nodeAddress == "" {
+		network, err := networkStore.GetNetwork(w.network)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't get network: %w", err)
+		}
+
+		hosts = network.API.GRPC.Hosts
+		retries = network.API.GRPC.Retries
+	} else if w.nodeAddress != "" {
+		hosts = []string{w.nodeAddress}
+		retries = 5
+	} else {
 		return nil, errors.New("either network file URL or node address must be provided")
 	}
+
+	nodeSelector, err := node.BuildRoundRobinSelectorWithRetryingNodes(zap.L(), hosts, retries)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't initialise node selector: %w", err)
+	}
+
+	nodeSelectorBuilder := func(hosts []string, retries uint64) (node.Selector, error) {
+		return nodeSelector, nil
+	}
+
+	w.apiSendTransaction = api.NewAdminSendTransaction(walletStore, networkStore, nodeSelectorBuilder)
 
 	if w.pubKey == "" {
 		if err = w.setupWallet(context.Background()); err != nil {
@@ -181,6 +199,31 @@ func (w *WalletV2Service) GenerateKey(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("couldn't generate key: %w", err)
 	}
 	return keyResp.PublicKey, nil
+}
+
+func (w *WalletV2Service) ImportWallet(ctx context.Context, overwrite bool) error {
+	if w.recoveryPhrase == "" {
+		return errors.New("recovery phrase is empty")
+	}
+
+	if overwrite {
+		if err := w.walletStore.DeleteWallet(ctx, w.walletName); err != nil {
+			return fmt.Errorf("couldn't delete wallet: %w", err)
+		}
+	}
+
+	importResp, err := w.apiImportWallet.Handle(ctx, api.AdminImportWalletParams{
+		Wallet:               w.walletName,
+		RecoveryPhrase:       w.recoveryPhrase,
+		KeyDerivationVersion: 1,
+		Passphrase:           w.passphrase,
+	}, jsonrpc.RequestMetadata{})
+	if err != nil {
+		return fmt.Errorf("couldn't import wallet: %w", err)
+	}
+
+	w.pubKey = importResp.(api.AdminImportWalletResult).Key.PublicKey
+	return nil
 }
 
 func (w *WalletV2Service) setupWallet(ctx context.Context) error {
@@ -262,7 +305,6 @@ func (w *WalletV2Service) listKeys(ctx context.Context) (api.AdminListKeysResult
 		return result, errors.New("no keys found")
 	}
 
-	w.pubKey = result.PublicKeys[0].PublicKey
 	return result, nil
 }
 

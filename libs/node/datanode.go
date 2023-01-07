@@ -47,42 +47,36 @@ func (n *DataNode) MustDialConnection(ctx context.Context) {
 		for _, h := range n.hosts {
 			go func(host string) {
 				defer func() {
-					cancel()
 					n.wg.Done()
 				}()
-				n.dialNode(ctx, host)
+				conn, err := grpc.DialContext(
+					ctx,
+					host,
+					grpc.WithTransportCredentials(insecure.NewCredentials()),
+					grpc.WithBlock(),
+				)
+				if err != nil {
+					if err != context.Canceled {
+						log.Printf("Failed to dial node '%s': %s\n", host, err)
+					}
+					return
+				}
+				cancel()
+				n.mu.Lock()
+				n.conn = conn
+				n.mu.Unlock()
 			}(h)
 		}
 		n.wg.Wait()
 		n.mu.Lock()
 		defer n.mu.Unlock()
-
-		if n.conn == nil {
+		if n.conn.GetState() != connectivity.Ready {
 			log.Fatalf("Failed to connect to DataNode")
 		}
 	})
 
 	n.wg.Wait()
 	n.once = sync.Once{}
-}
-
-func (n *DataNode) dialNode(ctx context.Context, host string) {
-	conn, err := grpc.DialContext(
-		ctx,
-		host,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
-	if err != nil {
-		if err != context.Canceled {
-			log.Printf("Failed to dial node '%s': %s\n", host, err)
-		}
-		return
-	}
-
-	n.mu.Lock()
-	n.conn = conn
-	n.mu.Unlock()
 }
 
 func (n *DataNode) Target() string {
@@ -128,8 +122,6 @@ func (n *DataNode) LastBlockData(ctx context.Context) (*vegaapipb.LastBlockHeigh
 	c := vegaapipb.NewCoreServiceClient(n.conn)
 	ctx, cancel := context.WithTimeout(ctx, n.callTimeout)
 	defer cancel()
-
-	var response *vegaapipb.LastBlockHeightResponse
 
 	response, err := c.LastBlockHeight(ctx, &vegaapipb.LastBlockHeightRequest{})
 	if err != nil {

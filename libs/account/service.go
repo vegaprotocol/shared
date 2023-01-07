@@ -39,7 +39,7 @@ func (a *Service) EnsureBalance(ctx context.Context, assetID string, balanceFn f
 		return err
 	}
 
-	// or liquidity provision and placing orders, we need only General account balance
+	// for liquidity provision and placing orders, we need only General account balance
 	// for liquidity increase, we need both Bond and General account balance
 	balance := balanceFn(store.Balance())
 

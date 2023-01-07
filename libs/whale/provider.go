@@ -15,7 +15,6 @@ import (
 	"code.vegaprotocol.io/shared/libs/whale/config"
 	"code.vegaprotocol.io/vega/logging"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
-	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 type Provider struct {
@@ -80,21 +79,34 @@ func (p *Provider) TopUpChan() chan types.TopUpRequest {
 }
 
 func (p *Provider) handleTopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
+	var err error
+	defer func() {
+		if err == nil || p.slack.enabled {
+			if err := p.account.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
+				p.log.With(
+					logging.String("receiver_address", receiverAddress),
+					logging.String("asset_id", assetID),
+					logging.String("amount", amount.String()),
+				).Error("failed to finalise top up", logging.Error(err))
+			}
+		}
+	}()
+
 	// TODO: remove deposit slack request, once deposited
-	if existDeposit, ok := p.getPendingDeposit(assetID); ok {
-		existDeposit.amount = amount.Add(amount, existDeposit.amount)
-		if p.slack.enabled {
+	if p.slack.enabled {
+		if existDeposit, ok := p.getPendingDeposit(assetID); ok {
 			newTimestamp, err := p.updateDan(ctx, assetID, receiverAddress, existDeposit.timestamp, existDeposit.amount)
 			if err != nil {
 				return fmt.Errorf("failed to update slack message: %s", err)
 			}
 			existDeposit.timestamp = newTimestamp
+			existDeposit.amount = amount.Add(amount, existDeposit.amount)
+			p.setPendingDeposit(assetID, existDeposit)
+			return nil
 		}
-		p.setPendingDeposit(assetID, existDeposit)
-		return nil
 	}
 
-	err := p.deposit(ctx, "Whale", receiverAddress, assetID, amount)
+	err = p.deposit(ctx, "Whale", receiverAddress, assetID, amount)
 	if err == nil {
 		return nil
 	}
@@ -107,8 +119,6 @@ func (p *Provider) handleTopUp(ctx context.Context, receiverName, receiverAddres
 	deposit := pendingDeposit{
 		amount: amount,
 	}
-
-	p.setPendingDeposit(assetID, deposit)
 
 	if !p.slack.enabled {
 		return fmt.Errorf("failed to deposit: %w", err)
@@ -138,12 +148,27 @@ func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, a
 		return fmt.Errorf("unsupported asset type")
 	}
 
-	if err = p.depositERC20(ctx, asset, receiverAddress, amount); err != nil {
+	ownerKey, err := p.getOwnerKeyForAsset(asset.Id)
+	if err != nil {
+		return fmt.Errorf("failed to get owner key: %w", err)
+	}
+
+	contractAddress := asset.Details.GetErc20().ContractAddress
+
+	added, err := p.erc20.Deposit(
+		ctx,
+		ownerKey.privateKey,
+		ownerKey.address,
+		contractAddress,
+		receiverAddress,
+		amount,
+	)
+	if err != nil {
 		return fmt.Errorf("failed to deposit %s %s coins to address '%s', name '%s': %w", amount.String(), asset.Details.Symbol, receiverAddress, receiverName, err)
 	}
 
-	if err := p.account.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
-		return fmt.Errorf("failed to wait for whale top-up to finalise: %w", err)
+	if added.Int().LT(amount.Int()) {
+		return fmt.Errorf("deposited less than requested amount")
 	}
 
 	return nil
@@ -173,7 +198,7 @@ func (p *Provider) setPendingDeposit(assetID string, pending pendingDeposit) {
 	p.pendingDeposits[assetID] = pending
 }
 
-func (p *Provider) Stake(ctx context.Context, _, receiverAddress, assetID string, amount *num.Uint, from string) error {
+func (p *Provider) Stake(ctx context.Context, _, receiverAddress, assetID string, amount *num.Uint, _ string) error {
 	asset, err := p.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
 		AssetId: assetID,
 	})
@@ -199,33 +224,6 @@ func (p *Provider) Stake(ctx context.Context, _, receiverAddress, assetID string
 
 	if added.Int().LT(amount.Int()) {
 		return fmt.Errorf("staked less than requested amount")
-	}
-
-	return nil
-}
-
-func (p *Provider) depositERC20(ctx context.Context, asset *vega.Asset, receiverAddress string, amount *num.Uint) error {
-	ownerKey, err := p.getOwnerKeyForAsset(asset.Id)
-	if err != nil {
-		return fmt.Errorf("failed to get owner key: %w", err)
-	}
-
-	contractAddress := asset.Details.GetErc20().ContractAddress
-
-	added, err := p.erc20.Deposit(
-		ctx,
-		ownerKey.privateKey,
-		ownerKey.address,
-		contractAddress,
-		receiverAddress,
-		amount,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to add erc20 token: %w", err)
-	}
-
-	if added.Int().LT(amount.Int()) {
-		return fmt.Errorf("deposited less than requested amount")
 	}
 
 	return nil
