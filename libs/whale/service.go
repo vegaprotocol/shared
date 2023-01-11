@@ -96,6 +96,7 @@ func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress
 
 	w.log.With(logging.String("name", receiverName)).Debugf("%s: Waiting for top-up...", from)
 
+	// prevent multiple top-ups in the same epoch error
 	if err := w.accountStream.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
 		return fmt.Errorf("failed to wait for top-up to finalise: %w", err)
 	}
