@@ -21,7 +21,6 @@ type Provider struct {
 	node             dataNode
 	erc20            erc20Service
 	account          types.AccountStream
-	faucet           faucetClient
 	slack            slacker
 	ownerPrivateKeys map[string]string
 	pendingDeposits  map[string]pendingDeposit
@@ -46,14 +45,12 @@ func NewProvider(
 	log *logging.Logger,
 	node dataNode,
 	erc20 erc20Service,
-	faucet faucetClient,
 	account types.AccountStream,
 	config *config.WhaleConfig,
 ) *Provider {
 	p := &Provider{
 		node:             node,
 		erc20:            erc20,
-		faucet:           faucet,
 		account:          account,
 		ownerPrivateKeys: config.OwnerPrivateKeys,
 		topUpChan:        make(chan types.TopUpRequest),

@@ -106,7 +106,7 @@ func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, 
 			URL:       w.networkFileURL,
 			Overwrite: true,
 		}
-		_, errDetails := api.NewAdminImportNetwork(networkStore).Handle(context.Background(), networkImportParams, jsonrpc.RequestMetadata{})
+		_, errDetails := api.NewAdminImportNetwork(networkStore).Handle(context.Background(), networkImportParams)
 		if errDetails != nil {
 			return nil, errors.New(errDetails.Data)
 		}
@@ -185,7 +185,7 @@ func (w *WalletV2Service) SendJSONTransactionFrom(ctx context.Context, payload s
 		params.Network = w.network
 	}
 
-	rawResult, errDetails := w.apiSendTransaction.Handle(ctx, params, jsonrpc.RequestMetadata{})
+	rawResult, errDetails := w.apiSendTransaction.Handle(ctx, params)
 	if errDetails != nil {
 		return nil, errors.New(errDetails.Data)
 	}
@@ -217,7 +217,7 @@ func (w *WalletV2Service) ImportWallet(ctx context.Context, overwrite bool) erro
 		RecoveryPhrase:       w.recoveryPhrase,
 		KeyDerivationVersion: 1,
 		Passphrase:           w.passphrase,
-	}, jsonrpc.RequestMetadata{})
+	})
 	if err != nil {
 		return fmt.Errorf("couldn't import wallet: %w", err)
 	}
@@ -267,7 +267,7 @@ func (w *WalletV2Service) createWallet(ctx context.Context) (api.AdminCreateWall
 		Passphrase: w.passphrase,
 	}
 
-	rawResult, errDetails := w.apiCreateWallet.Handle(ctx, params, jsonrpc.RequestMetadata{})
+	rawResult, errDetails := w.apiCreateWallet.Handle(ctx, params)
 	if errDetails != nil {
 		return api.AdminCreateWalletResult{}, errors.New(errDetails.Data)
 	}
@@ -282,7 +282,7 @@ func (w *WalletV2Service) describeWallet(ctx context.Context) (api.AdminDescribe
 		Passphrase: w.passphrase,
 	}
 
-	rawResult, errDetails := w.apiDescribeWallet.Handle(ctx, params, jsonrpc.RequestMetadata{})
+	rawResult, errDetails := w.apiDescribeWallet.Handle(ctx, params)
 	if errDetails != nil {
 		return api.AdminDescribeWalletResult{}, errors.New(errDetails.Data)
 	}
@@ -295,7 +295,7 @@ func (w *WalletV2Service) listKeys(ctx context.Context) (api.AdminListKeysResult
 		Passphrase: w.passphrase,
 	}
 
-	rawResult, errDetails := w.apiListKeys.Handle(ctx, params, jsonrpc.RequestMetadata{})
+	rawResult, errDetails := w.apiListKeys.Handle(ctx, params)
 	if errDetails != nil {
 		return api.AdminListKeysResult{}, errors.New(errDetails.Data)
 	}
@@ -314,7 +314,7 @@ func (w *WalletV2Service) generateKey(ctx context.Context) (api.AdminGenerateKey
 		Passphrase: w.passphrase,
 	}
 
-	rawResult, errDetails := w.apiGenerateKey.Handle(ctx, params, jsonrpc.RequestMetadata{})
+	rawResult, errDetails := w.apiGenerateKey.Handle(ctx, params)
 	if errDetails != nil {
 		return api.AdminGenerateKeyResult{}, errors.New(errDetails.Data)
 	}

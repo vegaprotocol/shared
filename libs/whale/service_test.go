@@ -66,8 +66,8 @@ func TestService_TopUp(t *testing.T) {
 
 	fc := faucet.New(*addr)
 	ast := account.NewStream(log, wName, dn, nil)
-	cp := NewProvider(log, dn, es, fc, ast, conf)
-	as := account.NewService(log, "test", wKey, "asset", ast, cp)
+	cp := NewProvider(log, dn, es, ast, conf)
+	as := account.NewService(log, "test", wKey, ast, cp)
 	s := NewService(log, dn, wc, as, ast, fc, conf)
 	ctx := context.Background()
 	key := "69f684c78deefa27fd216ba771e4ca08085dea8e2b1dafd2c62352dda1e89073"

@@ -14,18 +14,16 @@ import (
 type Service struct {
 	name          string
 	pubKey        string
-	assetID       string
 	stores        map[string]balanceStore
 	accountStream accountStream
 	coinProvider  CoinProvider
 	log           *logging.Logger
 }
 
-func NewService(log *logging.Logger, name, pubKey, assetID string, accountStream accountStream, coinProvider CoinProvider) *Service {
+func NewService(log *logging.Logger, name, pubKey string, accountStream accountStream, coinProvider CoinProvider) *Service {
 	return &Service{
 		name:          name,
 		pubKey:        pubKey,
-		assetID:       assetID,
 		stores:        make(map[string]balanceStore),
 		accountStream: accountStream,
 		coinProvider:  coinProvider,
@@ -132,8 +130,8 @@ func (a *Service) Stake(ctx context.Context, receiverName, receiverPubKey, asset
 	return a.coinProvider.Stake(ctx, receiverName, receiverPubKey, assetID, amount, from)
 }
 
-func (a *Service) Balance(ctx context.Context) cache.Balance {
-	store, err := a.getStore(ctx, a.assetID)
+func (a *Service) Balance(ctx context.Context, assetID string) cache.Balance {
+	store, err := a.getStore(ctx, assetID)
 	if err != nil {
 		a.log.Error("failed to get balance store", logging.Error(err))
 		return cache.Balance{}
