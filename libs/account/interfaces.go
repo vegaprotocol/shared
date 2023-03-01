@@ -3,7 +3,6 @@ package account
 import (
 	"context"
 
-	"code.vegaprotocol.io/shared/libs/cache"
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/types"
 	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
@@ -21,18 +20,7 @@ type dataNode interface {
 
 type CoinProvider interface {
 	TopUpChan() chan types.TopUpRequest
-	Stake(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint, from string) error
-}
-
-type accountStream interface {
-	AssetByID(ctx context.Context, assetID string) (*vega.Asset, error)
-	GetBalances(ctx context.Context, assetID string, pubKey string) (balanceStore, error)
-	GetStake(ctx context.Context, pubKey string) (*num.Uint, error)
-}
-
-type balanceStore interface {
-	Balance() cache.Balance
-	BalanceSet(sets ...func(*cache.Balance))
+	Stake(ctx context.Context, receiverName, receiverAddress string, asset *vega.Asset, amount *num.Uint, from string) error
 }
 
 type busEventer interface {

@@ -17,6 +17,7 @@ import (
 	"code.vegaprotocol.io/shared/libs/wallet"
 	"code.vegaprotocol.io/shared/libs/whale/config"
 	"code.vegaprotocol.io/vega/logging"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 func TestService_TopUp(t *testing.T) {
@@ -66,12 +67,14 @@ func TestService_TopUp(t *testing.T) {
 
 	fc := faucet.New(*addr)
 	ast := account.NewStream(log, wName, dn, nil)
-	cp := NewProvider(log, dn, es, ast, conf)
+	cp := NewProvider(log, es, ast, conf)
 	as := account.NewService(log, "test", wKey, ast, cp)
-	s := NewService(log, dn, wc, as, ast, fc, conf)
+	s := NewService(log, wc, as, ast, fc, conf)
 	ctx := context.Background()
 	key := "69f684c78deefa27fd216ba771e4ca08085dea8e2b1dafd2c62352dda1e89073"
-	asset := "993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede"
+	asset := &vega.Asset{
+		Id: "993ed98f4f770d91a796faab1738551193ba45c62341d20597df70fea6704ede",
+	}
 	amount := num.NewUint(988939143512)
 
 	_ = s.handleTopUp(ctx, "some bot", key, asset, amount, "test")
@@ -110,7 +113,7 @@ func TestService_slackDan(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Provider{}
+			s := &ERC20Provider{}
 			if _, err := s.slackDan(tt.args.ctx, tt.args.assetID, tt.fields.walletPubKey, tt.args.amount); (err != nil) != tt.wantErr {
 				t.Errorf("slackDan() error = %v, wantErr %v", err, tt.wantErr)
 			}

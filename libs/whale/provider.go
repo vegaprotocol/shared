@@ -14,11 +14,10 @@ import (
 	"code.vegaprotocol.io/shared/libs/types"
 	"code.vegaprotocol.io/shared/libs/whale/config"
 	"code.vegaprotocol.io/vega/logging"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
-type Provider struct {
-	node             dataNode
+type ERC20Provider struct {
 	erc20            erc20Service
 	account          types.AccountStream
 	slack            slacker
@@ -43,13 +42,11 @@ type pendingDeposit struct {
 
 func NewProvider(
 	log *logging.Logger,
-	node dataNode,
 	erc20 erc20Service,
 	account types.AccountStream,
 	config *config.WhaleConfig,
-) *Provider {
-	p := &Provider{
-		node:             node,
+) *ERC20Provider {
+	p := &ERC20Provider{
 		erc20:            erc20,
 		account:          account,
 		ownerPrivateKeys: config.OwnerPrivateKeys,
@@ -65,24 +62,24 @@ func NewProvider(
 
 	go func() {
 		for req := range p.topUpChan {
-			req.ErrResp <- p.handleTopUp(req.Ctx, req.ReceiverName, req.ReceiverAddress, req.AssetID, req.Amount)
+			req.ErrResp <- p.handleTopUp(req.Ctx, req.ReceiverName, req.ReceiverAddress, req.Asset, req.Amount)
 		}
 	}()
 	return p
 }
 
-func (p *Provider) TopUpChan() chan types.TopUpRequest {
+func (p *ERC20Provider) TopUpChan() chan types.TopUpRequest {
 	return p.topUpChan
 }
 
-func (p *Provider) handleTopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
+func (p *ERC20Provider) handleTopUp(ctx context.Context, receiverName, receiverAddress string, asset *vega.Asset, amount *num.Uint) error {
 	var err error
 	defer func() {
 		if err == nil || p.slack.enabled {
-			if err := p.account.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
+			if err := p.account.WaitForTopUpToFinalise(ctx, receiverAddress, asset.Id, amount, 0); err != nil {
 				p.log.With(
-					logging.String("receiver_address", receiverAddress),
-					logging.String("asset_id", assetID),
+					logging.String("receiverAddress", receiverAddress),
+					logging.AssetID(asset.Id),
 					logging.String("amount", amount.String()),
 				).Error("failed to finalise top up", logging.Error(err))
 			}
@@ -91,19 +88,19 @@ func (p *Provider) handleTopUp(ctx context.Context, receiverName, receiverAddres
 
 	// TODO: remove deposit slack request, once deposited
 	if p.slack.enabled {
-		if existDeposit, ok := p.getPendingDeposit(assetID); ok {
-			newTimestamp, err := p.updateDan(ctx, assetID, receiverAddress, existDeposit.timestamp, existDeposit.amount)
+		if existDeposit, ok := p.getPendingDeposit(asset.Id); ok {
+			newTimestamp, err := p.updateDan(ctx, asset.Id, receiverAddress, existDeposit.timestamp, existDeposit.amount)
 			if err != nil {
 				return fmt.Errorf("failed to update slack message: %s", err)
 			}
 			existDeposit.timestamp = newTimestamp
 			existDeposit.amount = amount.Add(amount, existDeposit.amount)
-			p.setPendingDeposit(assetID, existDeposit)
+			p.setPendingDeposit(asset.Id, existDeposit)
 			return nil
 		}
 	}
 
-	err = p.deposit(ctx, "Whale", receiverAddress, assetID, amount)
+	err = p.deposit(ctx, "Whale", receiverAddress, asset, amount)
 	if err == nil {
 		return nil
 	}
@@ -123,21 +120,19 @@ func (p *Provider) handleTopUp(ctx context.Context, receiverName, receiverAddres
 
 	p.log.Debug("Fallback to slacking Dan...")
 
-	deposit.timestamp, err = p.slackDan(ctx, assetID, receiverAddress, amount)
+	deposit.timestamp, err = p.slackDan(ctx, asset.Id, receiverAddress, amount)
 	if err != nil {
 		p.log.Error("Failed to slack Dan", logging.Error(err))
 		return err
 	}
-	p.setPendingDeposit(assetID, deposit)
+	p.setPendingDeposit(asset.Id, deposit)
 	return nil
 }
 
-func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint) error {
-	asset, err := p.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
-		AssetId: assetID,
-	})
+func (p *ERC20Provider) deposit(ctx context.Context, receiverName, receiverAddress string, asset *vega.Asset, amount *num.Uint) error {
+	ownerKey, err := p.getOwnerKeyForAsset(asset.Id)
 	if err != nil {
-		return fmt.Errorf("failed to get asset id: %w", err)
+		return fmt.Errorf("failed to get owner key: %w", err)
 	}
 
 	erc20 := asset.Details.GetErc20()
@@ -145,18 +140,11 @@ func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, a
 		return fmt.Errorf("unsupported asset type")
 	}
 
-	ownerKey, err := p.getOwnerKeyForAsset(asset.Id)
-	if err != nil {
-		return fmt.Errorf("failed to get owner key: %w", err)
-	}
-
-	contractAddress := asset.Details.GetErc20().ContractAddress
-
 	added, err := p.erc20.Deposit(
 		ctx,
 		ownerKey.privateKey,
 		ownerKey.address,
-		contractAddress,
+		erc20.GetContractAddress(),
 		receiverAddress,
 		amount,
 	)
@@ -171,7 +159,7 @@ func (p *Provider) deposit(ctx context.Context, receiverName, receiverAddress, a
 	return nil
 }
 
-func (p *Provider) getPendingDeposit(assetID string) (pendingDeposit, bool) {
+func (p *ERC20Provider) getPendingDeposit(assetID string) (pendingDeposit, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -184,7 +172,7 @@ func (p *Provider) getPendingDeposit(assetID string) (pendingDeposit, bool) {
 	return pending, ok
 }
 
-func (p *Provider) setPendingDeposit(assetID string, pending pendingDeposit) {
+func (p *ERC20Provider) setPendingDeposit(assetID string, pending pendingDeposit) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -195,16 +183,10 @@ func (p *Provider) setPendingDeposit(assetID string, pending pendingDeposit) {
 	p.pendingDeposits[assetID] = pending
 }
 
-func (p *Provider) Stake(ctx context.Context, _, receiverAddress, assetID string, amount *num.Uint, _ string) error {
-	asset, err := p.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
-		AssetId: assetID,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get asset id: %w", err)
-	}
+func (p *ERC20Provider) Stake(ctx context.Context, _, receiverAddress string, asset *vega.Asset, amount *num.Uint, _ string) error {
 	erc20 := asset.Details.GetErc20()
 	if erc20 == nil {
-		return fmt.Errorf("asset is not erc20")
+		return fmt.Errorf("unsupported asset type")
 	}
 
 	ownerKey, err := p.getOwnerKeyForAsset(asset.Id)
@@ -231,7 +213,7 @@ type key struct {
 	address    string
 }
 
-func (p *Provider) getOwnerKeyForAsset(assetID string) (*key, error) {
+func (p *ERC20Provider) getOwnerKeyForAsset(assetID string) (*key, error) {
 	ownerPrivateKey, ok := p.ownerPrivateKeys[assetID]
 	if !ok {
 		return nil, fmt.Errorf("owner private key not configured for asset '%s'", assetID)
@@ -265,7 +247,7 @@ func addressFromPrivateKey(privateKey string) (string, error) {
 
 const msgTemplate = `Hi @here! Whale wallet account with pub key %s needs %s coins of assetID %s, so that it can feed the hungry bots.`
 
-func (p *Provider) slackDan(ctx context.Context, assetID, walletPubKey string, amount *num.Uint) (string, error) {
+func (p *ERC20Provider) slackDan(ctx context.Context, assetID, walletPubKey string, amount *num.Uint) (string, error) {
 	p.log.With(
 		logging.String("assetID", assetID),
 		logging.String("walletPubKey", walletPubKey),
@@ -298,7 +280,7 @@ func (p *Provider) slackDan(ctx context.Context, assetID, walletPubKey string, a
 	return respTimestamp, nil
 }
 
-func (p *Provider) updateDan(ctx context.Context, assetID, walletPubKey, oldTimestamp string, amount *num.Uint) (string, error) {
+func (p *ERC20Provider) updateDan(ctx context.Context, assetID, walletPubKey, oldTimestamp string, amount *num.Uint) (string, error) {
 	p.log.With(
 		logging.String("assetID", assetID),
 		logging.String("walletPubKey", walletPubKey),

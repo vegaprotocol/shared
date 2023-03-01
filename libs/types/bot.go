@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"code.vegaprotocol.io/shared/libs/num"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 type PauseSignal struct {
@@ -15,7 +16,7 @@ type TopUpRequest struct {
 	Ctx             context.Context
 	ReceiverName    string
 	ReceiverAddress string
-	AssetID         string
+	Asset           *vega.Asset
 	Amount          *num.Uint
 	From            string
 	ErrResp         chan error

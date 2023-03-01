@@ -7,6 +7,7 @@ import (
 
 	"code.vegaprotocol.io/shared/libs/num"
 	"code.vegaprotocol.io/shared/libs/types"
+	"code.vegaprotocol.io/vega/protos/vega"
 )
 
 func TestService_topUp(t *testing.T) {
@@ -17,7 +18,7 @@ func TestService_topUp(t *testing.T) {
 	}
 	type args struct {
 		ctx       context.Context
-		assetID   string
+		asset     *vega.Asset
 		askAmount *num.Uint
 	}
 	tests := []struct {
@@ -35,7 +36,7 @@ func TestService_topUp(t *testing.T) {
 			},
 			args: args{
 				ctx:       context.Background(),
-				assetID:   "fBTC",
+				asset:     &vega.Asset{Id: "fBTC"},
 				askAmount: num.NewUint(100),
 			},
 			wantErr: false,
@@ -48,7 +49,7 @@ func TestService_topUp(t *testing.T) {
 			},
 			args: args{
 				ctx:       context.Background(),
-				assetID:   "fBTC",
+				asset:     &vega.Asset{Id: "fBTC"},
 				askAmount: num.NewUint(100),
 			},
 			wantErr: true,
@@ -61,7 +62,7 @@ func TestService_topUp(t *testing.T) {
 				pubKey:       tt.fields.pubKey,
 				coinProvider: tt.fields.coinProvider,
 			}
-			if err := a.topUp(tt.args.ctx, tt.args.assetID, tt.args.askAmount); (err != nil) != tt.wantErr {
+			if err := a.topUp(tt.args.ctx, tt.args.asset, tt.args.askAmount); (err != nil) != tt.wantErr {
 				t.Errorf("topUp() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -84,6 +85,6 @@ func (m mockCoinProvider) TopUpChan() chan types.TopUpRequest {
 	return tch
 }
 
-func (m mockCoinProvider) Stake(context.Context, string, string, string, *num.Uint, string) error {
+func (m mockCoinProvider) Stake(context.Context, string, string, *vega.Asset, *num.Uint, string) error {
 	return m.err
 }

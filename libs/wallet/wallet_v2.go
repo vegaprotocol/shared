@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/golang/protobuf/jsonpb"
 	"go.uber.org/zap"
@@ -28,7 +29,9 @@ type WalletV2Service struct {
 	passphrase     string
 	recoveryPhrase string
 	pubKey         string
+	pkMu           sync.RWMutex
 	nodeAddress    string
+	nodeSelector   node.Selector
 	numRetries     uint64
 
 	walletStore  api.WalletStore
@@ -41,11 +44,13 @@ type WalletV2Service struct {
 	apiListKeys        jsonrpc.Command
 	apiGenerateKey     jsonrpc.Command
 	apiSendTransaction jsonrpc.Command
+	apiRotateKey       jsonrpc.Command
 }
 
 type WalletV2 interface {
 	PublicKey() string
 	GenerateKey(ctx context.Context) (string, error)
+	RotateKey(ctx context.Context) (string, error)
 	ImportWallet(ctx context.Context, overwrite bool) error
 	SendTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error)
 	SendJSONTransaction(ctx context.Context, txJsn string) (*commandspb.Transaction, error)
@@ -93,6 +98,7 @@ func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, 
 		apiImportWallet:   api.NewAdminImportWallet(walletStore),
 		apiListKeys:       api.NewAdminListKeys(walletStore),
 		apiGenerateKey:    api.NewAdminGenerateKey(walletStore),
+		apiRotateKey:      api.NewAdminRotateKey(walletStore),
 	}
 
 	var (
@@ -129,6 +135,8 @@ func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, 
 		return nil, fmt.Errorf("couldn't initialise node selector: %w", err)
 	}
 
+	w.nodeSelector = nodeSelector
+
 	nodeSelectorBuilder := func(hosts []string, retries uint64) (node.Selector, error) {
 		return nodeSelector, nil
 	}
@@ -145,12 +153,20 @@ func NewWalletV2Service(log *logging.Logger, config *Config) (*WalletV2Service, 
 }
 
 func (w *WalletV2Service) PublicKey() string {
+	w.pkMu.RLock()
+	defer w.pkMu.RUnlock()
 	return w.pubKey
+}
+
+func (w *WalletV2Service) setPublicKey(pubKey string) {
+	w.pkMu.Lock()
+	defer w.pkMu.Unlock()
+	w.pubKey = pubKey
 }
 
 func (w *WalletV2Service) SendTransaction(ctx context.Context, tx *walletpb.SubmitTransactionRequest) (*commandspb.Transaction, error) {
 	if tx.PubKey == "" {
-		tx.PubKey = w.pubKey
+		tx.PubKey = w.PublicKey()
 	}
 	tx.Propagate = true
 	jsn, err := (&jsonpb.Marshaler{Indent: "  "}).MarshalToString(tx)
@@ -161,7 +177,7 @@ func (w *WalletV2Service) SendTransaction(ctx context.Context, tx *walletpb.Subm
 }
 
 func (w *WalletV2Service) SendJSONTransaction(ctx context.Context, payload string) (*commandspb.Transaction, error) {
-	return w.SendJSONTransactionFrom(ctx, payload, w.pubKey)
+	return w.SendJSONTransactionFrom(ctx, payload, w.PublicKey())
 }
 
 func (w *WalletV2Service) SendJSONTransactionFrom(ctx context.Context, payload string, pubKey string) (*commandspb.Transaction, error) {
@@ -222,7 +238,8 @@ func (w *WalletV2Service) ImportWallet(ctx context.Context, overwrite bool) erro
 		return fmt.Errorf("couldn't import wallet: %w", err)
 	}
 
-	w.pubKey = importResp.(api.AdminImportWalletResult).Key.PublicKey
+	pubKey := importResp.(api.AdminImportWalletResult).Key.PublicKey
+	w.setPublicKey(pubKey)
 	return nil
 }
 
@@ -321,4 +338,52 @@ func (w *WalletV2Service) generateKey(ctx context.Context) (api.AdminGenerateKey
 
 	result := rawResult.(api.AdminGenerateKeyResult)
 	return result, nil
+}
+
+func (w *WalletV2Service) RotateKey(ctx context.Context) (string, error) {
+	newKey, err := w.generateKey(ctx)
+	if err != nil {
+		return "", fmt.Errorf("couldn't generate new key: %w", err)
+	}
+
+	newPubKey := newKey.PublicKey
+
+	rfn := func(node.ReportType, string) {}
+
+	n, err := w.nodeSelector.Node(ctx, rfn)
+	if err != nil {
+		return "", fmt.Errorf("failed to get node: %w", err)
+	}
+
+	lastBlock, err := n.LastBlock(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get last block: %w", err)
+	}
+
+	if lastBlock.ChainID == "" {
+		return "", fmt.Errorf("chain id is empty")
+	}
+
+	params := api.AdminRotateKeyParams{
+		Wallet:                w.walletName,
+		Passphrase:            w.passphrase,
+		FromPublicKey:         w.PublicKey(),
+		ToPublicKey:           newPubKey,
+		ChainID:               lastBlock.ChainID,
+		SubmissionBlockHeight: lastBlock.BlockHeight,
+		EnactmentBlockHeight:  lastBlock.BlockHeight + 5,
+	}
+
+	rawResult, errDetails := w.apiRotateKey.Handle(ctx, params)
+	if errDetails != nil {
+		return "", errors.New(errDetails.Data)
+	}
+
+	result := rawResult.(api.AdminRotateKeyResult)
+	_ = result.MasterPublicKey
+
+	w.log.Debug("wallet key rotated", logging.String("new public key", newPubKey))
+
+	w.setPublicKey(newPubKey)
+	return newPubKey, nil
 }

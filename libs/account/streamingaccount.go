@@ -23,7 +23,7 @@ type account struct {
 	name          string
 	log           *logging.Logger
 	node          dataNode
-	balanceStores map[string]*balanceStores // pubKey: balanceStore
+	balanceStores map[string]*balanceStores // pubKey: BalanceStore
 	busEvProc     busEventer
 
 	mu              sync.Mutex
@@ -41,13 +41,13 @@ func NewStream(log *logging.Logger, name string, node dataNode, pauseCh chan typ
 	}
 }
 
-func (a *account) GetBalances(ctx context.Context, assetID string, pubKey string) (balanceStore, error) {
+func (a *account) GetBalances(ctx context.Context, assetID string, pubKey string) (types.BalanceStore, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	stores, okAcc := a.balanceStores[pubKey]
 	if !okAcc {
 		stores = &balanceStores{
-			balanceStores: make(map[string]balanceStore),
+			balanceStores: make(map[string]types.BalanceStore),
 		}
 		a.balanceStores[pubKey] = stores
 	} else {
@@ -130,7 +130,7 @@ func (a *account) subscribeToAccountEvents(ctx context.Context, pubKey string) {
 	a.busEvProc.ProcessEvents(context.Background(), "AccountData: "+a.name, req, proc)
 }
 
-func (a *account) setBalanceByType(accountType vega.AccountType, balanceStr string, store balanceStore) error {
+func (a *account) setBalanceByType(accountType vega.AccountType, balanceStr string, store types.BalanceStore) error {
 	balance, err := num.ConvertUint256(balanceStr)
 	if err != nil {
 		return fmt.Errorf("failed to convert account balance: %w", err)
@@ -141,9 +141,11 @@ func (a *account) setBalanceByType(accountType vega.AccountType, balanceStr stri
 }
 
 func (a *account) AssetByID(ctx context.Context, assetID string) (*vega.Asset, error) {
-	return a.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
-		AssetId: assetID,
-	})
+	asset, err := a.node.AssetByID(ctx, &dataapipb.GetAssetRequest{AssetId: assetID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get asset: %w", err)
+	}
+	return asset, nil
 }
 
 // WaitForTopUpToFinalise is a blocking call that waits for the top-up finalise event to be received.
@@ -371,17 +373,17 @@ func (a *account) WaitForStakeLinkingToFinalise(ctx context.Context, pubKey stri
 
 type balanceStores struct {
 	mu            sync.Mutex
-	balanceStores map[string]balanceStore
+	balanceStores map[string]types.BalanceStore
 }
 
-func (b *balanceStores) get(assetID string) (balanceStore, bool) {
+func (b *balanceStores) get(assetID string) (types.BalanceStore, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	store, ok := b.balanceStores[assetID]
 	return store, ok
 }
 
-func (b *balanceStores) set(assetID string, store balanceStore) {
+func (b *balanceStores) set(assetID string, store types.BalanceStore) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.balanceStores[assetID] = store

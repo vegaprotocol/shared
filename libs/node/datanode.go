@@ -174,9 +174,9 @@ func (n *DataNode) PartyAccounts(ctx context.Context, req *dataapipb.ListAccount
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	var accounts []*dataapipb.AccountBalance
-	for _, a := range response.Accounts.Edges {
-		accounts = append(accounts, a.Node)
+	accounts := make([]*dataapipb.AccountBalance, len(response.Accounts.Edges))
+	for i, a := range response.Accounts.Edges {
+		accounts[i] = a.Node
 	}
 
 	return accounts, nil
@@ -247,9 +247,9 @@ func (n *DataNode) Markets(ctx context.Context, req *dataapipb.ListMarketsReques
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	var markets []*vega.Market
-	for _, m := range response.Markets.Edges {
-		markets = append(markets, m.Node)
+	markets := make([]*vega.Market, len(response.Markets.Edges))
+	for i, m := range response.Markets.Edges {
+		markets[i] = m.Node
 	}
 
 	return markets, nil
@@ -275,9 +275,9 @@ func (n *DataNode) PositionsByParty(ctx context.Context, req *dataapipb.ListPosi
 		return nil, fmt.Errorf(msg, e.ErrorDetail(err))
 	}
 
-	var positions []*vega.Position
-	for _, p := range response.Positions.Edges {
-		positions = append(positions, p.Node)
+	positions := make([]*vega.Position, len(response.Positions.Edges))
+	for i, p := range response.Positions.Edges {
+		positions[i] = p.Node
 	}
 
 	return positions, nil

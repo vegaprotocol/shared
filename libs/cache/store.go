@@ -19,25 +19,25 @@ func (s *BalanceStore) BalanceSet(sets ...func(*Balance)) {
 }
 
 type MarketStore struct {
-	market cache[MarketData]
+	marketData cache[MarketData]
 }
 
 func NewMarketStore() *MarketStore {
 	return &MarketStore{
-		market: newCache[MarketData](),
+		marketData: newCache[MarketData](),
 	}
 }
 
-func (s *MarketStore) Market() MarketData {
-	return s.market.get()
+func (s *MarketStore) MarketData() MarketData {
+	return s.marketData.get()
 }
 
 func (s *MarketStore) OpenVolume() int64 {
-	return s.market.get().openVolume
+	return s.marketData.get().openVolume
 }
 
-func (s *MarketStore) MarketSet(sets ...func(*MarketData)) {
-	s.market.set(sets...)
+func (s *MarketStore) MarketDataSet(sets ...func(*MarketData)) {
+	s.marketData.set(sets...)
 }
 
 type cache[T any] struct {

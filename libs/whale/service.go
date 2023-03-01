@@ -14,14 +14,12 @@ import (
 	"code.vegaprotocol.io/shared/libs/whale/config"
 	vtypes "code.vegaprotocol.io/vega/core/types"
 	"code.vegaprotocol.io/vega/logging"
-	dataapipb "code.vegaprotocol.io/vega/protos/data-node/api/v2"
 	"code.vegaprotocol.io/vega/protos/vega"
 	commV1 "code.vegaprotocol.io/vega/protos/vega/commands/v1"
 	"code.vegaprotocol.io/vega/protos/vega/wallet/v1"
 )
 
 type Service struct {
-	node          dataNode
 	wallet        wallet.WalletV2
 	account       accountService
 	accountStream types.AccountStream
@@ -34,7 +32,6 @@ type Service struct {
 
 func NewService(
 	log *logging.Logger,
-	dataNode dataNode,
 	wallet wallet.WalletV2,
 	account accountService,
 	accountStream types.AccountStream,
@@ -42,7 +39,6 @@ func NewService(
 	config *config.WhaleConfig,
 ) *Service {
 	w := &Service{
-		node:   dataNode,
 		wallet: wallet,
 		faucet: faucet,
 
@@ -58,7 +54,7 @@ func NewService(
 				req.Ctx,
 				req.ReceiverName,
 				req.ReceiverAddress,
-				req.AssetID,
+				req.Asset,
 				req.Amount,
 				req.From,
 			)
@@ -72,32 +68,32 @@ func (w *Service) TopUpChan() chan types.TopUpRequest {
 	return w.topUpChan
 }
 
-func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint, from string) error {
+func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress string, asset *vega.Asset, amount *num.Uint, from string) error {
 	w.log.With(logging.String("receiverName", receiverName)).Debug("Top up...")
 
-	if assetID == "" {
-		return fmt.Errorf("assetID is empty for bot '%s'", receiverName)
+	if asset == nil {
+		return fmt.Errorf("asset is nil for bot '%s'", receiverName)
 	}
 
 	if receiverAddress == w.wallet.PublicKey() {
 		return fmt.Errorf("whale and bot address cannot be the same")
 	}
 
-	if err := w.topUp(ctx, receiverName, receiverAddress, assetID, amount, from); err != nil {
+	if err := w.topUp(ctx, receiverName, receiverAddress, asset, amount, from); err != nil {
 		return fmt.Errorf("failed to top up: %w", err)
 	}
 
 	w.log.With(
 		logging.String("receiverName", receiverName),
 		logging.String("receiverPubKey", receiverAddress),
-		logging.AssetID(assetID),
+		logging.AssetID(asset.Id),
 		logging.String("amount", amount.String()),
 	).Debug("Top-up sent")
 
 	w.log.With(logging.String("name", receiverName)).Debugf("%s: Waiting for top-up...", from)
 
 	// prevent multiple top-ups in the same epoch error
-	if err := w.accountStream.WaitForTopUpToFinalise(ctx, receiverAddress, assetID, amount, 0); err != nil {
+	if err := w.accountStream.WaitForTopUpToFinalise(ctx, receiverAddress, asset.Id, amount, 0); err != nil {
 		return fmt.Errorf("failed to wait for top-up to finalise: %w", err)
 	}
 	w.log.With(logging.String("name", receiverName)).Debugf("%s: Top-up complete", from)
@@ -105,33 +101,26 @@ func (w *Service) handleTopUp(ctx context.Context, receiverName, receiverAddress
 	return nil
 }
 
-func (w *Service) topUp(ctx context.Context, receiverName string, receiverAddress string, assetID string, amount *num.Uint, from string) error {
-	asset, err := w.node.AssetByID(ctx, &dataapipb.GetAssetRequest{
-		AssetId: assetID,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get asset by id: %w", err)
-	}
-
+func (w *Service) topUp(ctx context.Context, receiverName string, receiverAddress string, asset *vega.Asset, amount *num.Uint, from string) error {
 	if builtin := asset.Details.GetBuiltinAsset(); builtin != nil {
-		if err := w.depositBuiltin(ctx, assetID, receiverAddress, amount, builtin); err != nil {
+		if err := w.depositBuiltin(ctx, asset.Id, receiverAddress, amount, builtin); err != nil {
 			return errors.Wrap(err, "failed to deposit builtin")
 		}
 		return nil
 	}
 
 	// dp is 0 because the amount had already been corrected for the DP
-	if err := w.account.EnsureBalance(ctx, assetID, cache.General, amount, 0, w.config.TopUpScale, from+">receiverNameWhale"); err != nil {
+	if err := w.account.EnsureBalance(ctx, asset, cache.General, amount, 0, w.config.TopUpScale, from+">receiverNameWhale"); err != nil {
 		return fmt.Errorf("failed to ensure enough funds: %w", err)
 	}
 
-	_, err = w.wallet.SendTransaction(ctx, &v1.SubmitTransactionRequest{
+	_, err := w.wallet.SendTransaction(ctx, &v1.SubmitTransactionRequest{
 		Command: &v1.SubmitTransactionRequest_Transfer{
 			Transfer: &commV1.Transfer{
 				FromAccountType: vtypes.AccountTypeGeneral,
 				To:              receiverAddress,
 				ToAccountType:   vtypes.AccountTypeGeneral,
-				Asset:           assetID,
+				Asset:           asset.Id,
 				Amount:          amount.String(),
 				Reference:       fmt.Sprintf("Bot '%s' Top-Up", receiverName),
 				Kind:            &commV1.Transfer_OneOff{OneOff: &commV1.OneOffTransfer{}},
@@ -185,10 +174,10 @@ func (w *Service) depositBuiltin(ctx context.Context, assetID, pubKey string, am
 	return nil
 }
 
-func (w *Service) Stake(ctx context.Context, receiverName, receiverAddress, assetID string, amount *num.Uint, from string) error {
+func (w *Service) Stake(ctx context.Context, receiverName, receiverAddress string, asset *vega.Asset, amount *num.Uint, from string) error {
 	w.log.With(logging.String("receiverAddress", receiverAddress)).Debug("Staking...")
 
-	if err := w.account.Stake(ctx, receiverName, receiverAddress, assetID, amount, from); err != nil {
+	if err := w.account.Stake(ctx, receiverName, receiverAddress, asset, amount, from); err != nil {
 		return fmt.Errorf("failed to stake: %w", err)
 	}
 
